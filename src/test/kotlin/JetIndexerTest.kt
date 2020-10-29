@@ -1,10 +1,17 @@
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 
 internal class JetIndexerTest {
+    @BeforeEach
+    internal fun setUp() {
+        System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "DEBUG")
+    }
+
     @Test
     internal fun singleFileSearch(@TempDir tempDir: Path) {
         val path = writeFile(
@@ -46,6 +53,87 @@ internal class JetIndexerTest {
             listOf(QueryResult("foo", path3, 0)),
             indexer.query("foo")
         )
+    }
+
+    @Test
+    internal fun readError() {
+        val path = Paths.get("does", "not", "exit")
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path))
+        indexer.start()
+        assertEquals(
+            emptyList<QueryResult>(),
+            indexer.query("test"))
+    }
+
+    @Test
+    internal fun goodFileAndBadFile(@TempDir tempDir: Path) {
+        val path1 = writeFile(tempDir, "one two three")
+        val path2 = Paths.get("does", "not", "exit")
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path1, path2))
+        indexer.start()
+        assertEquals(
+            listOf(QueryResult("one", path1, 0)),
+            indexer.query("one"))
+    }
+
+    @Test
+    internal fun deletedFile(@TempDir tempDir: Path) {
+        val path1 = writeFile(tempDir, "one two three")
+        val path2 = writeFile(tempDir, "three four five")
+
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path1, path2))
+        indexer.start()
+
+        assertEquals(
+            listOf(
+                QueryResult("three", path1, 8),
+                QueryResult("three", path2, 0)
+            ).sortedBy { it.path },
+            indexer.query("three").sortedBy { it.path })
+
+        indexer.deleteDocument(path2)
+
+        assertEquals(
+            listOf(
+                QueryResult("three", path1, 8),
+            ).sortedBy { it.path },
+            indexer.query("three").sortedBy { it.path })
+    }
+
+    @Test
+    internal fun updatedFile(@TempDir tempDir: Path) {
+        val path1 = writeFile(tempDir, "one two three")
+        val path2 = writeFile(tempDir, "three four five")
+
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path1, path2))
+        indexer.start()
+
+        assertEquals(
+            listOf(
+                QueryResult("three", path1, 8),
+                QueryResult("three", path2, 0)
+            ).sortedBy { it.path },
+            indexer.query("three").sortedBy { it.path })
+
+        assertEquals(
+            listOf(
+                QueryResult("five", path2, 11),
+            ).sortedBy { it.path },
+            indexer.query("five").sortedBy { it.path })
+
+        path2.toFile().writeText("xxx yyyy three")
+        indexer.updateDocument(path2)
+
+        assertEquals(
+            listOf(
+                QueryResult("three", path1, 8),
+                QueryResult("three", path2, 9)
+            ).sortedBy { it.path },
+            indexer.query("three").sortedBy { it.path })
+
+        assertEquals(
+            emptyList<QueryResult>(),
+            indexer.query("five"))
     }
 }
 

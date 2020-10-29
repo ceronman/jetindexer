@@ -1,0 +1,9 @@
+Caveats of the implementation:
+
+- Only UTF-8 file encoding is handled at the moment. Files in different encodings will cause errors.
+- All files in the given paths are processed, there is no way to skip certain kinds of files.
+  It would be nice to add an option to filter certain extensions or file patterns e.g. `.git`
+- Errors while reading files are logged and ignored, no exception is raised. This is a design choice.
+  It would be nice to make the library be able to programmatically query the errors that have occurred
+  while indexed.
+- It would be nice to have a way of checking progress when indexing.

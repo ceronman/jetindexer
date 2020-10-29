@@ -19,6 +19,7 @@ class JetIndexer(
         for (path in paths) {
             addDocument(path)
         }
+        // TODO: Do recursive tree walking
         // TODO: Initiate file watching
     }
 
@@ -39,7 +40,7 @@ class JetIndexer(
     }
 
     private fun addDocument(path: Path) {
-        log.debug("Updating $path")
+        log.debug("Adding $path")
 
         try {
             val chars = readChars(path)
@@ -54,12 +55,36 @@ class JetIndexer(
             val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
             documents[path] = Document(path, attributes, occurrences)
         } catch (e: IOException) {
-            log.error("Unable to read file $path", e)
+            log.error("Unable to read file $path: $e")
+            log.debug("Exception thrown", e)
             return
         }
     }
 
-    private fun deleteDocument(path: Path): Nothing = TODO()
+    // TODO: This is temporarily public to be able to test
+    fun updateDocument(path: Path) {
+        deleteDocument(path)
+        addDocument(path)
+    }
+
+    // TODO: This is temporarily public to be able to test
+    fun deleteDocument(path: Path) {
+        log.debug("Deleting from index $path")
+        val document = documents[path]
+        if (document == null) {
+            log.warn("Attempting to delete a nonexistent document $path")
+            return
+        }
+        for (term in document.occurrences.keys) {
+            val paths = index[term]
+            if (paths == null) {
+                log.warn("Index doesn't contain terms in $path")
+                continue
+            }
+            paths.remove(path)
+        }
+        documents.remove(path)
+    }
 
     private fun readChars(path: Path) = sequence {
         // TODO: Handle character encoding
