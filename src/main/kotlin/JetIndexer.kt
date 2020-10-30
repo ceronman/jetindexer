@@ -42,6 +42,18 @@ class JetIndexer(
     private fun addDocument(path: Path) {
         log.debug("Adding $path")
 
+        if (Files.notExists(path)) {
+            log.warn("File $path does not exist, ignoring")
+            return
+        }
+
+        // TODO: test this
+        val contentType = Files.probeContentType(path)
+        if (contentType != "text/plain") {
+            log.warn("File $path is not text/plain, it's $contentType. Ignoring")
+            return
+        }
+
         try {
             val chars = readChars(path)
             val tokens = tokenizer.tokenize(chars)
