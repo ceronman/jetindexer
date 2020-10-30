@@ -7,3 +7,4 @@ Caveats of the implementation:
   It would be nice to make the library be able to programmatically query the errors that have occurred
   while indexed.
 - It would be nice to have a way of checking progress when indexing.
+- There is currently no limit to the depth of the file scanning. Alghouth symbolic links are followed.

@@ -22,7 +22,7 @@ internal class JetIndexerTest {
         """.trimIndent()
         )
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path))
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
         indexer.start()
 
         assertEquals(
@@ -39,7 +39,7 @@ internal class JetIndexerTest {
         val path2 = writeFile(tempDir, "three four five")
         val path3 = writeFile(tempDir, "foo")
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path1, path2, path3))
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
         indexer.start()
 
         assertEquals(
@@ -69,7 +69,7 @@ internal class JetIndexerTest {
     internal fun goodFileAndBadFile(@TempDir tempDir: Path) {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = Paths.get("does", "not", "exit")
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path1, path2))
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
         indexer.start()
         assertEquals(
             listOf(QueryResult("one", path1, 0)),
@@ -81,7 +81,7 @@ internal class JetIndexerTest {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = writeFile(tempDir, "three four five")
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path1, path2))
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
         indexer.start()
 
         assertEquals(
@@ -105,7 +105,7 @@ internal class JetIndexerTest {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = writeFile(tempDir, "three four five")
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path1, path2))
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
         indexer.start()
 
         assertEquals(
@@ -135,6 +135,33 @@ internal class JetIndexerTest {
             emptyList<QueryResult>(),
             indexer.query("five"))
     }
+
+    @Test
+    internal fun nestedDirectories(@TempDir tempDir: Path) {
+        val parent1 = Files.createDirectories(tempDir.resolve(Paths.get("a", "b", "c")))
+        val parent2 = Files.createDirectories(tempDir.resolve(Paths.get("x", "y", "z")))
+        val parent3 = Files.createDirectories(tempDir.resolve(Paths.get("m", "n", "o")))
+        val path1 = writeFile(parent1, "one two three")
+        val path2 = writeFile(parent2, "three four five")
+        val path3 = writeFile(parent3, "foo")
+
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
+        indexer.start()
+
+        assertEquals(
+            listOf(
+                QueryResult("three", path1, 8),
+                QueryResult("three", path2, 0)
+            ).sortedBy { it.path },
+            indexer.query("three").sortedBy { it.path })
+
+        assertEquals(
+            listOf(QueryResult("foo", path3, 0)),
+            indexer.query("foo")
+        )
+    }
+
+    // TODO: Text symlink
 }
 
 private fun writeFile(dir: Path, contents: String): Path {

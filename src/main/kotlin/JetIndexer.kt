@@ -1,10 +1,10 @@
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
+import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
 class JetIndexer(
@@ -16,10 +16,11 @@ class JetIndexer(
     private val documents = ConcurrentHashMap<Path, Document>()
 
     fun start() {
-        for (path in paths) {
+        val allPaths = walkPaths()
+        for (path in allPaths) {
             addDocument(path)
         }
-        // TODO: Do recursive tree walking
+
         // TODO: Initiate file watching
     }
 
@@ -42,19 +43,14 @@ class JetIndexer(
     private fun addDocument(path: Path) {
         log.debug("Adding $path")
 
-        if (Files.notExists(path)) {
-            log.warn("File $path does not exist, ignoring")
-            return
-        }
-
-        // TODO: test this
-        val contentType = Files.probeContentType(path)
-        if (contentType != "text/plain") {
-            log.warn("File $path is not text/plain, it's $contentType. Ignoring")
-            return
-        }
-
         try {
+            // TODO: test this
+            val contentType = Files.probeContentType(path)
+            if (contentType != "text/plain") {
+                log.warn("File $path is not text/plain, it's $contentType. Ignoring")
+                return
+            }
+
             val chars = readChars(path)
             val tokens = tokenizer.tokenize(chars)
             val occurrences = HashMap<String, MutableList<Int>>()
@@ -108,6 +104,40 @@ class JetIndexer(
                 char = it.read()
             }
         }
+    }
+
+    private fun walkPaths(): ArrayList<Path> {
+        val allPaths = ArrayList<Path>()
+        for (path in paths) {
+            Files.walkFileTree(path, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                object : FileVisitor<Path> {
+                    override fun preVisitDirectory(p: Path, attributes: BasicFileAttributes): FileVisitResult {
+                        log.debug("Scanning directory $p")
+                        return FileVisitResult.CONTINUE
+                    }
+
+                    override fun visitFile(p: Path, attributes: BasicFileAttributes): FileVisitResult {
+                        log.debug("Found regular file $p")
+                        allPaths.add(p)
+                        return FileVisitResult.CONTINUE
+                    }
+
+                    override fun visitFileFailed(p: Path, e: IOException?): FileVisitResult {
+                        log.warn("Unable to access file $p: $e")
+                        log.debug("Exception raised", e)
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    override fun postVisitDirectory(p: Path, e: IOException?): FileVisitResult {
+                        if (e != null) {
+                            log.warn("Error after accessing directory $p")
+                            log.debug("Exception raised", e)
+                        }
+                        return FileVisitResult.CONTINUE
+                    }
+                })
+        }
+        return allPaths
     }
 }
 
