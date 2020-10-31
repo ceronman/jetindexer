@@ -161,7 +161,34 @@ internal class JetIndexerTest {
         )
     }
 
-    // TODO: Text symlink
+    @Test
+    internal fun symlinks(@TempDir tempDir: Path) {
+        val parent1 = Files.createDirectories(tempDir.resolve(Paths.get("a", "b", "c")))
+        val parent2 = Files.createDirectories(tempDir.resolve(Paths.get("x", "y", "z")))
+        val parent3 = Files.createDirectories(tempDir.resolve(Paths.get("m", "n", "o")))
+        val path1 = writeFile(parent1, "one two three")
+        val path2 = writeFile(parent2, "three four five")
+        val path3 = writeFile(parent3, "foo")
+        val symlink = Files.createSymbolicLink(tempDir.resolve("link"), path3)
+
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
+        indexer.start()
+
+        assertEquals(
+            listOf(
+                QueryResult("three", path1, 8),
+                QueryResult("three", path2, 0)
+            ).sortedBy { it.path },
+            indexer.query("three").sortedBy { it.path })
+
+        assertEquals(
+            listOf(
+                QueryResult("foo", path3, 0),
+                QueryResult("foo", symlink, 0)
+            ),
+            indexer.query("foo")
+        )
+    }
 }
 
 private fun writeFile(dir: Path, contents: String): Path {
