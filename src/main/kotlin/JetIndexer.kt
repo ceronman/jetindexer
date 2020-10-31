@@ -1,3 +1,7 @@
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.*
@@ -11,17 +15,25 @@ class JetIndexer(
     private val tokenizer: Tokenizer,
     private val paths: Collection<Path>
 ) {
+    val indexingProgress: ReceiveChannel<Float> get() = _indexingProgress
+    
+    private val _indexingProgress = Channel<Float>()
     private val log = LoggerFactory.getLogger(this.javaClass)
     private val index = ConcurrentHashMap<String, MutableSet<Path>>()
     private val documents = ConcurrentHashMap<Path, Document>()
 
-    fun start() {
+    suspend fun index() = withContext(Dispatchers.Default) {
         val allPaths = walkPaths()
-        for (path in allPaths) {
+        for ((i, path) in allPaths.withIndex()) {
+            val progress = i.toFloat() / allPaths.size.toFloat()
+            _indexingProgress.send(progress)
             addDocument(path)
         }
+        _indexingProgress.send(1.0f)
+        _indexingProgress.close()
 
         // TODO: Initiate file watching
+        Thread.sleep(100000)
     }
 
     fun stop(): Nothing = TODO()
@@ -106,7 +118,7 @@ class JetIndexer(
         }
     }
 
-    private fun walkPaths(): ArrayList<Path> {
+    private fun walkPaths(): List<Path> {
         val allPaths = ArrayList<Path>()
         for (path in paths) {
             Files.walkFileTree(path, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,

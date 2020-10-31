@@ -1,3 +1,6 @@
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -7,13 +10,18 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 internal class JetIndexerTest {
+    @TempDir
+    @JvmField
+    var tempDirField: Path? = null
+    private val tempDir: Path get() = tempDirField!!
+
     @BeforeEach
     internal fun setUp() {
         System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "DEBUG")
     }
 
     @Test
-    internal fun singleFileSearch(@TempDir tempDir: Path) {
+    internal fun singleFileSearch() {
         val path = writeFile(
             tempDir, """
             one two three
@@ -22,8 +30,7 @@ internal class JetIndexerTest {
         """.trimIndent()
         )
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
-        indexer.start()
+        val indexer = createIndexer()
 
         assertEquals(
             listOf(
@@ -34,13 +41,12 @@ internal class JetIndexerTest {
     }
 
     @Test
-    internal fun multipleFilesSearch(@TempDir tempDir: Path) {
+    internal fun multipleFilesSearch() {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = writeFile(tempDir, "three four five")
         val path3 = writeFile(tempDir, "foo")
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
-        indexer.start()
+        val indexer = createIndexer()
 
         assertEquals(
             listOf(
@@ -58,31 +64,30 @@ internal class JetIndexerTest {
     @Test
     internal fun readError() {
         val path = Paths.get("does", "not", "exit")
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(path))
-        indexer.start()
+        val indexer = createIndexer()
         assertEquals(
             emptyList<QueryResult>(),
-            indexer.query("test"))
+            indexer.query("test")
+        )
     }
 
     @Test
-    internal fun goodFileAndBadFile(@TempDir tempDir: Path) {
+    internal fun goodFileAndBadFile() {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = Paths.get("does", "not", "exit")
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
-        indexer.start()
+        val indexer = createIndexer()
         assertEquals(
             listOf(QueryResult("one", path1, 0)),
-            indexer.query("one"))
+            indexer.query("one")
+        )
     }
 
     @Test
-    internal fun deletedFile(@TempDir tempDir: Path) {
+    internal fun deletedFile() {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = writeFile(tempDir, "three four five")
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
-        indexer.start()
+        val indexer = createIndexer()
 
         assertEquals(
             listOf(
@@ -101,12 +106,11 @@ internal class JetIndexerTest {
     }
 
     @Test
-    internal fun updatedFile(@TempDir tempDir: Path) {
+    internal fun updatedFile() {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = writeFile(tempDir, "three four five")
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
-        indexer.start()
+        val indexer = createIndexer()
 
         assertEquals(
             listOf(
@@ -133,11 +137,12 @@ internal class JetIndexerTest {
 
         assertEquals(
             emptyList<QueryResult>(),
-            indexer.query("five"))
+            indexer.query("five")
+        )
     }
 
     @Test
-    internal fun nestedDirectories(@TempDir tempDir: Path) {
+    internal fun nestedDirectories() {
         val parent1 = Files.createDirectories(tempDir.resolve(Paths.get("a", "b", "c")))
         val parent2 = Files.createDirectories(tempDir.resolve(Paths.get("x", "y", "z")))
         val parent3 = Files.createDirectories(tempDir.resolve(Paths.get("m", "n", "o")))
@@ -145,8 +150,7 @@ internal class JetIndexerTest {
         val path2 = writeFile(parent2, "three four five")
         val path3 = writeFile(parent3, "foo")
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
-        indexer.start()
+        val indexer = createIndexer()
 
         assertEquals(
             listOf(
@@ -171,8 +175,7 @@ internal class JetIndexerTest {
         val path3 = writeFile(parent3, "foo")
         val symlink = Files.createSymbolicLink(tempDir.resolve("link"), path3)
 
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
-        indexer.start()
+        val indexer = createIndexer()
 
         assertEquals(
             listOf(
@@ -189,10 +192,25 @@ internal class JetIndexerTest {
             indexer.query("foo")
         )
     }
+
+    private fun createIndexer(): JetIndexer {
+        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
+
+        GlobalScope.launch {
+            indexer.index()
+        }
+        runBlocking {
+            for (p in indexer.indexingProgress) {
+                println("Loading ${p * 100.0}%")
+            }
+        }
+        return indexer
+    }
+
+    private fun writeFile(dir: Path?, contents: String): Path {
+        val path = Files.createTempFile(dir, "test", "test")
+        path.toFile().writeText(contents)
+        return path
+    }
 }
 
-private fun writeFile(dir: Path, contents: String): Path {
-    val path = Files.createTempFile(dir, "test", "test")
-    path.toFile().writeText(contents)
-    return path
-}
