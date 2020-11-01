@@ -1,11 +1,4 @@
-interface Tokenizer {
-    fun tokenize(input: Sequence<Char>): Sequence<Token>
-}
-
-data class Token(
-    val lexeme: String,
-    val position: Int
-)
+package com.ceronman.jetindexer
 
 class WhiteSpaceTokenizer : Tokenizer {
     override fun tokenize(input: Sequence<Char>): Sequence<Token> = sequence {

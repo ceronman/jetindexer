@@ -1,3 +1,5 @@
+package com.ceronman.jetindexer
+
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 

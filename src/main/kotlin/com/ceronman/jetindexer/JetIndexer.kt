@@ -1,3 +1,5 @@
+package com.ceronman.jetindexer
+
 import io.methvin.watcher.DirectoryChangeEvent
 import io.methvin.watcher.DirectoryChangeListener
 import io.methvin.watcher.DirectoryWatcher
@@ -40,7 +42,7 @@ class JetIndexer(
 
         watcher = DirectoryWatcher.builder()
             .paths(directoryPaths)
-            .listener(object: DirectoryChangeListener {
+            .listener(object : DirectoryChangeListener {
                 override fun onEvent(event: DirectoryChangeEvent?) {
                     if (event == null) {
                         return
@@ -211,9 +213,3 @@ class JetIndexer(
         return allPaths
     }
 }
-
-data class QueryResult(
-    val term: String,
-    val path: Path,
-    val position: Int
-)

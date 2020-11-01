@@ -1,3 +1,5 @@
+package com.ceronman.jetindexer
+
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -177,13 +179,15 @@ internal class JetIndexerTest {
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
             ),
-            indexer.query("three"))
+            indexer.query("three")
+        )
 
         assertQuery(
             listOf(
                 QueryResult("five", path2, 11),
             ),
-            indexer.query("five"))
+            indexer.query("five")
+        )
 
         val path3 = writeFile(tempDir, "xxx yyy zzz three")
 
@@ -195,13 +199,15 @@ internal class JetIndexerTest {
                 QueryResult("three", path2, 0),
                 QueryResult("three", path3, 12),
             ),
-            indexer.query("three"))
+            indexer.query("three")
+        )
 
         assertQuery(
             listOf(
                 QueryResult("five", path2, 11),
             ),
-            indexer.query("five"))
+            indexer.query("five")
+        )
     }
 
     @Test
@@ -284,6 +290,3 @@ internal class JetIndexerTest {
         assertEquals(expected.sortedBy { it.path }, result.sortedBy { it.path })
     }
 }
-
-
-
