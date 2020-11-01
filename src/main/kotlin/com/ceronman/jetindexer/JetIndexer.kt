@@ -105,7 +105,7 @@ class JetIndexer(
         try {
             // TODO: test this
             val contentType = Files.probeContentType(path)
-            if (contentType != "text/plain") {
+            if (!contentType.contains("text")) {
                 log.warn("File $path is not text/plain, it's $contentType. Ignoring")
                 return
             }
@@ -185,6 +185,11 @@ class JetIndexer(
             Files.walkFileTree(path, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
                 object : FileVisitor<Path> {
                     override fun preVisitDirectory(p: Path, attributes: BasicFileAttributes): FileVisitResult {
+                        // TODO: Don't hardcode this.
+                        if (p.fileName.toString() == ".git") {
+                            log.info("Ignoring .git directory")
+                            return FileVisitResult.SKIP_SUBTREE
+                        }
                         log.debug("Scanning directory $p")
                         return FileVisitResult.CONTINUE
                     }
