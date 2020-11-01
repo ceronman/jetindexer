@@ -26,7 +26,6 @@ internal class JetIndexerTest {
 
     @AfterEach
     internal fun tearDown() {
-        println("Tear down")
         indexer.stop()
         runBlocking { indexerJob.join() }
     }
@@ -274,9 +273,13 @@ internal class JetIndexerTest {
         }
 
         runBlocking {
-            for (p in indexer.indexingProgress) {
-                println("Loading ${p * 100.0}%")
+            val events = indexer.events()
+            for (event in events) {
+                if (event is IndexingProgressEvent && event.done) {
+                    break
+                }
             }
+            events.cancel()
         }
     }
 

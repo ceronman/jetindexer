@@ -4,8 +4,9 @@ import io.methvin.watcher.DirectoryChangeEvent
 import io.methvin.watcher.DirectoryChangeListener
 import io.methvin.watcher.DirectoryWatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ConflatedBroadcastChannel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import java.io.IOException
@@ -20,9 +21,7 @@ class JetIndexer(
     private val tokenizer: Tokenizer,
     private val paths: Collection<Path>
 ) {
-    val indexingProgress: ReceiveChannel<Float> get() = _indexingProgress
-
-    private val _indexingProgress = Channel<Float>()
+    private val eventsChannel = ConflatedBroadcastChannel<Event>()
     private val log = LoggerFactory.getLogger(this.javaClass)
     private val index = ConcurrentHashMap<String, MutableSet<Path>>()
     private val documents = ConcurrentHashMap<Path, Document>()
@@ -32,11 +31,10 @@ class JetIndexer(
         val directoryPaths = filterPaths(paths)
         val filePaths = walkPaths(directoryPaths)
         for ((i, path) in filePaths.withIndex()) {
-            val progress = i.toFloat() / filePaths.size.toFloat()
-            _indexingProgress.send(progress)
+            val progress = (i.toFloat() / filePaths.size.toFloat()) * 100.0
+            eventsChannel.send(IndexingProgressEvent(progress.toInt(), false))
             addDocument(path)
         }
-        _indexingProgress.send(1.0f)
 
         log.debug("Prepared to watch $directoryPaths")
 
@@ -64,11 +62,16 @@ class JetIndexer(
                             log.info("Watcher overflow event")
                         }
                     }
+
+                    // TODO: This doesn't seem right!
+                    runBlocking { eventsChannel.send(IndexUpdateEvent()) }
                 }
             })
             .build()
         log.debug("Watcher was built")
-        _indexingProgress.close()
+
+        eventsChannel.send(IndexingProgressEvent(100, true))
+
         try {
             watcher!!.watch()
         } catch (e: ClosedWatchServiceException) {
@@ -97,6 +100,10 @@ class JetIndexer(
             }
         }
         return results
+    }
+
+    fun events(): ReceiveChannel<Event> {
+        return eventsChannel.openSubscription()
     }
 
     private fun addDocument(path: Path) {
@@ -218,3 +225,7 @@ class JetIndexer(
         return allPaths
     }
 }
+
+sealed class Event
+class IndexUpdateEvent(): Event()
+data class IndexingProgressEvent(val progress: Int, val done: Boolean): Event()

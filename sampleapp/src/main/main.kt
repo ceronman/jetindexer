@@ -1,3 +1,5 @@
+import com.ceronman.jetindexer.IndexUpdateEvent
+import com.ceronman.jetindexer.IndexingProgressEvent
 import com.ceronman.jetindexer.JetIndexer
 import com.ceronman.jetindexer.WhiteSpaceTokenizer
 import kotlinx.coroutines.GlobalScope
@@ -23,6 +25,19 @@ fun main(args: Array<String>) {
     inputBox.text = "input query"
     inputBox.isEnabled = false
 
+    fun search() {
+        val term = inputBox.text
+        if (term.isEmpty()) {
+            return
+        }
+        val results = indexer.query(term)
+        val resultText = StringBuilder()
+        for (result in results) {
+            resultText.append("${result.path}:${result.position}\n")
+        }
+        logArea.text = resultText.toString()
+    }
+
     inputBox.document.addDocumentListener(object: DocumentListener {
         override fun insertUpdate(e: DocumentEvent?) {
             search()
@@ -34,19 +49,6 @@ fun main(args: Array<String>) {
 
         override fun changedUpdate(e: DocumentEvent?) {
             search()
-        }
-
-        fun search() {
-            val term = inputBox.text
-            if (term.isEmpty()) {
-                return
-            }
-            val results = indexer.query(term)
-            val resultText = StringBuilder()
-            for (result in results) {
-                resultText.append("${result.path}:${result.position}\n")
-            }
-            logArea.text = resultText.toString()
         }
     })
 
@@ -60,13 +62,21 @@ fun main(args: Array<String>) {
             indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(fileChooser.selectedFile.toPath()))
             GlobalScope.launch { indexer.index() }
             GlobalScope.launch {
-                for (p in indexer.indexingProgress) {
-                    progressBar.value = (p * 100.0).toInt()
+                for (event in indexer.events()) {
+                    if (event is IndexingProgressEvent) {
+                        progressBar.value = event.progress
+                        if (event.done) {
+                            inputBox.text = ""
+                            inputBox.isEnabled = true
+                            inputBox.isEditable = true
+                            logArea.text = "^ Type something in the box above!"
+                        }
+                    } else if (event is IndexUpdateEvent) {
+                        println ("Index has been updated")
+                        search()
+                    }
                 }
-                inputBox.text = ""
-                inputBox.isEnabled = true
-                inputBox.isEditable = true
-                logArea.text = "^ Type something in the box above!"
+                println("Events have been closed")
             }
             selectDirButton.isEnabled = false
         }
