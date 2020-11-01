@@ -1,3 +1,6 @@
+import io.methvin.watcher.DirectoryChangeEvent
+import io.methvin.watcher.DirectoryChangeListener
+import io.methvin.watcher.DirectoryWatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -16,27 +19,69 @@ class JetIndexer(
     private val paths: Collection<Path>
 ) {
     val indexingProgress: ReceiveChannel<Float> get() = _indexingProgress
-    
+
     private val _indexingProgress = Channel<Float>()
     private val log = LoggerFactory.getLogger(this.javaClass)
     private val index = ConcurrentHashMap<String, MutableSet<Path>>()
     private val documents = ConcurrentHashMap<Path, Document>()
+    @Volatile private var watcher: DirectoryWatcher? = null
 
     suspend fun index() = withContext(Dispatchers.Default) {
-        val allPaths = walkPaths()
-        for ((i, path) in allPaths.withIndex()) {
-            val progress = i.toFloat() / allPaths.size.toFloat()
+        val directoryPaths = filterPaths(paths)
+        val filePaths = walkPaths(directoryPaths)
+        for ((i, path) in filePaths.withIndex()) {
+            val progress = i.toFloat() / filePaths.size.toFloat()
             _indexingProgress.send(progress)
             addDocument(path)
         }
         _indexingProgress.send(1.0f)
-        _indexingProgress.close()
 
-        // TODO: Initiate file watching
-        Thread.sleep(100000)
+        log.debug("Prepared to watch $directoryPaths")
+
+        watcher = DirectoryWatcher.builder()
+            .paths(directoryPaths)
+            .listener(object: DirectoryChangeListener {
+                override fun onEvent(event: DirectoryChangeEvent?) {
+                    if (event == null) {
+                        return
+                    }
+                    when (event.eventType()) {
+                        DirectoryChangeEvent.EventType.CREATE -> {
+                            log.info("Watcher create event ${event.path()}")
+                            addDocument(event.path())
+                        }
+                        DirectoryChangeEvent.EventType.DELETE -> {
+                            log.info("Watcher delete event ${event.path()}")
+                            deleteDocument(event.path())
+                        }
+                        DirectoryChangeEvent.EventType.MODIFY -> {
+                            log.info("Watcher modify event ${event.path()}")
+                            updateDocument(event.path())
+                        }
+                        DirectoryChangeEvent.EventType.OVERFLOW -> {
+                            log.info("Watcher overflow event")
+                        }
+                    }
+                }
+            })
+            .build()
+        log.debug("Watcher was built")
+        _indexingProgress.close()
+        try {
+            watcher!!.watch()
+        } catch (e: ClosedWatchServiceException) {
+            log.warn("Closed service")
+        }
+        log.info("Terminating watch")
     }
 
-    fun stop(): Nothing = TODO()
+    fun stop() {
+        log.info("Stopping watch service")
+        if (watcher == null) {
+            log.error("Watcher is null!")
+        }
+        watcher?.close()
+    }
 
     fun query(term: String): List<QueryResult> {
         val paths = index[term] ?: return emptyList()
@@ -81,13 +126,11 @@ class JetIndexer(
         }
     }
 
-    // TODO: This is temporarily public to be able to test
-    fun updateDocument(path: Path) {
+    private fun updateDocument(path: Path) {
         deleteDocument(path)
         addDocument(path)
     }
 
-    // TODO: This is temporarily public to be able to test
     fun deleteDocument(path: Path) {
         log.debug("Deleting from index $path")
         val document = documents[path]
@@ -118,7 +161,23 @@ class JetIndexer(
         }
     }
 
-    private fun walkPaths(): List<Path> {
+    private fun filterPaths(paths: Collection<Path>): List<Path> {
+        val filteredPaths = ArrayList<Path>()
+        for (path in paths) {
+            if (!Files.isDirectory(path)) {
+                log.warn("Path $path is not a directory, individual files are not supported")
+                continue
+            }
+            if (!Files.exists(path)) {
+                log.warn("Path $path does not exit. Ignoring")
+                continue
+            }
+            filteredPaths.add(path)
+        }
+        return filteredPaths
+    }
+
+    private fun walkPaths(paths: Collection<Path>): List<Path> {
         val allPaths = ArrayList<Path>()
         for (path in paths) {
             Files.walkFileTree(path, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,

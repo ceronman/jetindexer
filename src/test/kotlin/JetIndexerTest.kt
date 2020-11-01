@@ -1,13 +1,12 @@
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.assertEquals
+import kotlinx.coroutines.*
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlin.test.assertEquals
 
 internal class JetIndexerTest {
     @TempDir
@@ -15,9 +14,19 @@ internal class JetIndexerTest {
     var tempDirField: Path? = null
     private val tempDir: Path get() = tempDirField!!
 
+    private lateinit var indexer: JetIndexer
+    private lateinit var indexerJob: Job
+
     @BeforeEach
     internal fun setUp() {
         System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "DEBUG")
+    }
+
+    @AfterEach
+    internal fun tearDown() {
+        println("Tear down")
+        indexer.stop()
+        runBlocking { indexerJob.join() }
     }
 
     @Test
@@ -30,14 +39,16 @@ internal class JetIndexerTest {
         """.trimIndent()
         )
 
-        val indexer = createIndexer()
+        initIndexer()
 
-        assertEquals(
+        assertQuery(
             listOf(
                 QueryResult("six", path, 24),
                 QueryResult("six", path, 28)
-            ).sortedBy { it.path },
-            indexer.query("six").sortedBy { it.path })
+            ),
+            indexer.query("six"))
+
+        indexer.stop()
     }
 
     @Test
@@ -46,40 +57,46 @@ internal class JetIndexerTest {
         val path2 = writeFile(tempDir, "three four five")
         val path3 = writeFile(tempDir, "foo")
 
-        val indexer = createIndexer()
+        initIndexer()
 
-        assertEquals(
+        assertQuery(
             listOf(
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
-            ).sortedBy { it.path },
-            indexer.query("three").sortedBy { it.path })
+            ),
+            indexer.query("three"))
 
-        assertEquals(
+        assertQuery(
             listOf(QueryResult("foo", path3, 0)),
             indexer.query("foo")
         )
+
+        indexer.stop()
     }
 
     @Test
     internal fun readError() {
         val path = Paths.get("does", "not", "exit")
-        val indexer = createIndexer()
-        assertEquals(
-            emptyList<QueryResult>(),
+        initIndexer(listOf(path))
+        assertQuery(
+            emptyList(),
             indexer.query("test")
         )
+        indexer.stop()
     }
 
     @Test
     internal fun goodFileAndBadFile() {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = Paths.get("does", "not", "exit")
-        val indexer = createIndexer()
-        assertEquals(
+
+        initIndexer(listOf(tempDir, path2))
+
+        assertQuery(
             listOf(QueryResult("one", path1, 0)),
             indexer.query("one")
         )
+        indexer.stop()
     }
 
     @Test
@@ -87,22 +104,26 @@ internal class JetIndexerTest {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = writeFile(tempDir, "three four five")
 
-        val indexer = createIndexer()
+        initIndexer()
 
-        assertEquals(
+        assertQuery(
             listOf(
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
-            ).sortedBy { it.path },
-            indexer.query("three").sortedBy { it.path })
+            ),
+            indexer.query("three"))
 
-        indexer.deleteDocument(path2)
+        Files.delete(path2)
 
-        assertEquals(
+        Thread.sleep(100) // TODO: Improve this by using an event channel
+
+        assertQuery(
             listOf(
                 QueryResult("three", path1, 8),
-            ).sortedBy { it.path },
-            indexer.query("three").sortedBy { it.path })
+            ),
+            indexer.query("three"))
+
+        indexer.stop()
     }
 
     @Test
@@ -110,35 +131,77 @@ internal class JetIndexerTest {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = writeFile(tempDir, "three four five")
 
-        val indexer = createIndexer()
+        initIndexer()
 
-        assertEquals(
+        assertQuery(
             listOf(
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
-            ).sortedBy { it.path },
-            indexer.query("three").sortedBy { it.path })
+            ),
+            indexer.query("three"))
 
-        assertEquals(
+        assertQuery(
             listOf(
                 QueryResult("five", path2, 11),
-            ).sortedBy { it.path },
-            indexer.query("five").sortedBy { it.path })
+            ),
+            indexer.query("five"))
 
         path2.toFile().writeText("xxx yyyy three")
-        indexer.updateDocument(path2)
 
-        assertEquals(
+        Thread.sleep(100) // TODO: Improve this by using an event channel
+
+        assertQuery(
             listOf(
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 9)
-            ).sortedBy { it.path },
-            indexer.query("three").sortedBy { it.path })
+            ),
+            indexer.query("three"))
 
-        assertEquals(
+        assertQuery(
             emptyList<QueryResult>(),
             indexer.query("five")
         )
+
+        indexer.stop()
+    }
+
+    @Test
+    internal fun addedFile() = runBlocking {
+        val path1 = writeFile(tempDir, "one two three")
+        val path2 = writeFile(tempDir, "three four five")
+
+        initIndexer()
+
+        assertQuery(
+            listOf(
+                QueryResult("three", path1, 8),
+                QueryResult("three", path2, 0)
+            ),
+            indexer.query("three"))
+
+        assertQuery(
+            listOf(
+                QueryResult("five", path2, 11),
+            ),
+            indexer.query("five"))
+
+        val path3 = writeFile(tempDir, "xxx yyy zzz three")
+
+        delay(100) // TODO: Improve this by using an event
+
+        assertQuery(
+            listOf(
+                QueryResult("three", path1, 8),
+                QueryResult("three", path2, 0),
+                QueryResult("three", path3, 12),
+            ),
+            indexer.query("three"))
+
+        assertQuery(
+            listOf(
+                QueryResult("five", path2, 11),
+            ),
+            indexer.query("five"))
     }
 
     @Test
@@ -150,23 +213,25 @@ internal class JetIndexerTest {
         val path2 = writeFile(parent2, "three four five")
         val path3 = writeFile(parent3, "foo")
 
-        val indexer = createIndexer()
+        initIndexer()
 
-        assertEquals(
+        assertQuery(
             listOf(
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
-            ).sortedBy { it.path },
-            indexer.query("three").sortedBy { it.path })
+            ),
+            indexer.query("three"))
 
-        assertEquals(
+        assertQuery(
             listOf(QueryResult("foo", path3, 0)),
             indexer.query("foo")
         )
+
+        indexer.stop()
     }
 
     @Test
-    internal fun symlinks(@TempDir tempDir: Path) {
+    internal fun symlinks() {
         val parent1 = Files.createDirectories(tempDir.resolve(Paths.get("a", "b", "c")))
         val parent2 = Files.createDirectories(tempDir.resolve(Paths.get("x", "y", "z")))
         val parent3 = Files.createDirectories(tempDir.resolve(Paths.get("m", "n", "o")))
@@ -175,42 +240,50 @@ internal class JetIndexerTest {
         val path3 = writeFile(parent3, "foo")
         val symlink = Files.createSymbolicLink(tempDir.resolve("link"), path3)
 
-        val indexer = createIndexer()
+        initIndexer()
 
-        assertEquals(
+        assertQuery(
             listOf(
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
-            ).sortedBy { it.path },
-            indexer.query("three").sortedBy { it.path })
+            ),
+            indexer.query("three"))
 
-        assertEquals(
+        assertQuery(
             listOf(
                 QueryResult("foo", path3, 0),
                 QueryResult("foo", symlink, 0)
             ),
             indexer.query("foo")
         )
+
+        indexer.stop()
     }
 
-    private fun createIndexer(): JetIndexer {
-        val indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(tempDir))
+    private fun initIndexer(paths: List<Path> = listOf(tempDir)) {
+        indexer = JetIndexer(WhiteSpaceTokenizer(), paths)
 
-        GlobalScope.launch {
+        indexerJob = GlobalScope.launch {
             indexer.index()
         }
+
         runBlocking {
             for (p in indexer.indexingProgress) {
                 println("Loading ${p * 100.0}%")
             }
         }
-        return indexer
     }
 
-    private fun writeFile(dir: Path?, contents: String): Path {
+    private fun writeFile(dir: Path, contents: String): Path {
         val path = Files.createTempFile(dir, "test", "test")
         path.toFile().writeText(contents)
         return path
     }
+
+    private fun assertQuery(expected: List<QueryResult>, result: List<QueryResult>) {
+        assertEquals(expected.sortedBy { it.path }, result.sortedBy { it.path })
+    }
 }
+
+
 
