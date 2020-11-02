@@ -5,7 +5,9 @@ import io.methvin.watcher.DirectoryChangeListener
 import io.methvin.watcher.DirectoryWatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ConflatedBroadcastChannel
-import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -21,7 +23,9 @@ class JetIndexer(
     private val tokenizer: Tokenizer,
     private val paths: Collection<Path>
 ) {
-    private val eventsChannel = ConflatedBroadcastChannel<Event>()
+    val events: Flow<Event> get() = _events.asSharedFlow()
+    private val _events = MutableSharedFlow<Event>()
+
     private val log = LoggerFactory.getLogger(this.javaClass)
     private val index = ConcurrentHashMap<String, MutableSet<Path>>()
     private val documents = ConcurrentHashMap<Path, Document>()
@@ -32,7 +36,7 @@ class JetIndexer(
         val filePaths = walkPaths(directoryPaths)
         for ((i, path) in filePaths.withIndex()) {
             val progress = (i.toFloat() / filePaths.size.toFloat()) * 100.0
-            eventsChannel.send(IndexingProgressEvent(progress.toInt(), false))
+            _events.emit(IndexingProgressEvent(progress.toInt(), false))
             addDocument(path)
         }
 
@@ -64,13 +68,13 @@ class JetIndexer(
                     }
 
                     // TODO: This doesn't seem right!
-                    runBlocking { eventsChannel.send(IndexUpdateEvent()) }
+                    runBlocking { _events.emit(IndexUpdateEvent()) }
                 }
             })
             .build()
         log.debug("Watcher was built")
 
-        eventsChannel.send(IndexingProgressEvent(100, true))
+        _events.emit(IndexingProgressEvent(100, true))
 
         try {
             watcher!!.watch()
@@ -100,10 +104,6 @@ class JetIndexer(
             }
         }
         return results
-    }
-
-    fun events(): ReceiveChannel<Event> {
-        return eventsChannel.openSubscription()
     }
 
     private fun addDocument(path: Path) {

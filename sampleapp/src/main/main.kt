@@ -3,6 +3,9 @@ import com.ceronman.jetindexer.IndexingProgressEvent
 import com.ceronman.jetindexer.JetIndexer
 import com.ceronman.jetindexer.WhiteSpaceTokenizer
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -62,7 +65,7 @@ fun main(args: Array<String>) {
             indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(fileChooser.selectedFile.toPath()))
             GlobalScope.launch { indexer.index() }
             GlobalScope.launch {
-                for (event in indexer.events()) {
+                indexer.events.collect { event ->
                     if (event is IndexingProgressEvent) {
                         progressBar.value = event.progress
                         if (event.done) {
@@ -72,11 +75,9 @@ fun main(args: Array<String>) {
                             logArea.text = "^ Type something in the box above!"
                         }
                     } else if (event is IndexUpdateEvent) {
-                        println ("Index has been updated")
                         search()
                     }
                 }
-                println("Events have been closed")
             }
             selectDirButton.isEnabled = false
         }

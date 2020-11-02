@@ -1,6 +1,10 @@
 package com.ceronman.jetindexer
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.takeWhile
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -273,13 +277,9 @@ internal class JetIndexerTest {
         }
 
         runBlocking {
-            val events = indexer.events()
-            for (event in events) {
-                if (event is IndexingProgressEvent && event.done) {
-                    break
-                }
-            }
-            events.cancel()
+            indexer.events.filter { it is IndexingProgressEvent && it.done }
+                .take(1)
+                .collect { }
         }
     }
 
