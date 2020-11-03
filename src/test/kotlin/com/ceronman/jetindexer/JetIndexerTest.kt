@@ -295,18 +295,33 @@ internal class JetIndexerTest {
         }
 
         initIndexer()
+        val timeout = 10000L
 
         runBlocking {
+            launch(Dispatchers.IO) {
+                withTimeout(timeout) {
+                    while (isActive) {
+                        writeFile(tempDir, randomText(words, 20))
+                        delay(100)
+                    }
+
+                }
+            }
             for (i in 0..10) {
                 launch(Dispatchers.IO) {
-                    withTimeout(1000) {
+                    withTimeout(timeout) {
+                        var empty = 0
                         var count = 0
                         while (isActive) {
                             val word = words[ThreadLocalRandom.current().nextInt(0, words.size)]
-                            indexer.query(word)
+                            val result = indexer.query(word)
+                            if (result.isEmpty()) {
+                                empty++
+                            }
                             count++
                         }
-                        println("Made $count queries")
+                        val perSecond = (count / (timeout / 1000))
+                        println("Made $count queries, $empty empty. $perSecond per second")
                     }
                 }
             }
