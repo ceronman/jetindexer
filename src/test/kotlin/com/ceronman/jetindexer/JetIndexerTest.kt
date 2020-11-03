@@ -12,6 +12,8 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.*
+import java.util.concurrent.ThreadLocalRandom
 import kotlin.test.assertEquals
 
 internal class JetIndexerTest {
@@ -267,6 +269,48 @@ internal class JetIndexerTest {
         )
 
         indexer.stop()
+    }
+
+    @Test
+    internal fun concurrentSearches() {
+        fun randomWord(size: Int): String {
+            val builder = StringBuilder()
+            for (i in 0..size) {
+                val char = ThreadLocalRandom.current().nextInt('a'.toInt(), 'z'.toInt() + 1)
+                builder.appendCodePoint(char)
+            }
+            return builder.toString()
+        }
+
+        fun randomText(words :List<String>, size: Int): String {
+            return (0..size).joinToString(" ") {
+                words[ThreadLocalRandom.current().nextInt(0, words.size)]
+            }
+        }
+
+        val words = (0..10000).map { randomWord(5) }
+
+        for (i in 0..100) {
+            writeFile(tempDir, randomText(words, 20))
+        }
+
+        initIndexer()
+
+        runBlocking {
+            for (i in 0..10) {
+                launch(Dispatchers.IO) {
+                    withTimeout(1000) {
+                        var count = 0
+                        while (isActive) {
+                            val word = words[ThreadLocalRandom.current().nextInt(0, words.size)]
+                            indexer.query(word)
+                            count++
+                        }
+                        println("Made $count queries")
+                    }
+                }
+            }
+        }
     }
 
     private fun initIndexer(paths: List<Path> = listOf(tempDir)) {
