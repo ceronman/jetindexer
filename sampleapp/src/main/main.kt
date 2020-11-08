@@ -1,7 +1,4 @@
-import com.ceronman.jetindexer.IndexUpdateEvent
-import com.ceronman.jetindexer.IndexingProgressEvent
-import com.ceronman.jetindexer.JetIndexer
-import com.ceronman.jetindexer.WhiteSpaceTokenizer
+import com.ceronman.jetindexer.*
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filter
@@ -9,6 +6,7 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.io.File
 import java.lang.StringBuilder
 import javax.swing.*
 import javax.swing.event.DocumentEvent
@@ -60,9 +58,10 @@ fun main(args: Array<String>) {
     selectDirButton.addActionListener {
         val fileChooser = JFileChooser()
         fileChooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+        fileChooser.currentDirectory = File("/home/ceronman/code/github/intellij-community")
         if (fileChooser.showOpenDialog(selectDirButton) == JFileChooser.APPROVE_OPTION) {
             println("Selected ${fileChooser.selectedFile}")
-            indexer = JetIndexer(WhiteSpaceTokenizer(), listOf(fileChooser.selectedFile.toPath()))
+            indexer = JetIndexer(TrigramTokenizer(), listOf(fileChooser.selectedFile.toPath()))
             GlobalScope.launch { indexer.index() }
             GlobalScope.launch {
                 indexer.events.collect { event ->
