@@ -1,3 +1,5 @@
+package com.ceronman.jetindexer
+
 import java.nio.ByteBuffer
 
 class DeltaVarInt {

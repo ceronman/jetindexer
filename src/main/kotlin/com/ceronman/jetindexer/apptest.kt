@@ -17,6 +17,11 @@ private val log = LoggerFactory.getLogger("app")
 data class Doc(val path: Path, val id: Int)
 
 fun main(args: Array<String>) = runBlocking {
+    Files.walk(Paths.get("/home/ceronman/indexes")).forEach {
+        if (it != Paths.get("/home/ceronman/indexes")) {
+            Files.deleteIfExists(it)
+        }
+    }
     val path = Paths.get("/home/ceronman/code/github/intellij-community")
 //    val path = Paths.get("/home/ceronman/code/github/linux")
 //    val path = Paths.get("/home/ceronman/code/loxido")
@@ -27,45 +32,102 @@ fun main(args: Array<String>) = runBlocking {
     var time = measureTimeMillis {
         val filePaths = walkPaths(path)
         val docs = filePaths.withIndex().map { (i, p) -> Doc(p, i)}
-        println("Got ${docs.size} paths")
-        val chunkSize = 1000
+        val chunkSize = 2000
         val chunks= docs.chunked(chunkSize)
         println("Using ${chunks.size} chunks of size $chunkSize")
 
-//        val index4 = index4(docs)
-
-        val jobs = ArrayList<Deferred<ByteArray>>()
-        for (chunk in docs.chunked(chunkSize)) {
+        val jobs = ArrayList<Job>()
+        for ((i, chunk) in docs.chunked(chunkSize).withIndex()) {
             val job = async(Dispatchers.Default) {
-                index(chunk)
+                index2(i, chunk)
             }
             jobs.add(job)
         }
-        val results = jobs.awaitAll()
+        jobs.joinAll()
+
+
+//        println("Got ${docs.size} paths")
+//        val chunkSize = 1000
+//        val chunks= docs.chunked(chunkSize)
+//        println("Using ${chunks.size} chunks of size $chunkSize")
+//
+//        val jobs = ArrayList<Deferred<ByteArray>>()
+//        for (chunk in docs.chunked(chunkSize)) {
+//            val job = async(Dispatchers.Default) {
+//                index(chunk)
+//            }
+//            jobs.add(job)
+//        }
+//        val results = jobs.awaitAll()
         println("Jobs done")
 
-        index = InvertedIndex.fromPostings(results)
-        println("Index size ${index.tokens.size}")
-
-//        val uniqProblems = HashSet<Int>()
-//        val docsById = docs.map { it.id to it }.toMap()
-//        for (token in index.tokens.keys) {
-//            val docs1 = index.query(token)
-//            val docs2 = index4.getOrDefault(token, emptyList())
-//
-//            if (docs1 != docs2) {
-//                println("token '$token' has different results $docs1 $docs2")
-//            }
-//        }
+//        index = InvertedIndex.fromPostings(results)
+//        println("Index size ${index.tokens.size}")
     }
     println("Took $time milliseconds (${time.toDouble() / 1000.0} seconds")
-    val t = measureTimeMillis {
-        for (i in 0..1000) {
-            val result = index.search("public static")
-//            println("Result size ${result.size}")
+}
+
+private fun index2(shardId: Int, docs: Collection<Doc>): Path {
+    val index = HashMap<String, BinPosting>()
+    val tokenizer = BetterTrigramTokenizer2()
+    val tokenPositions = HashMap<String, MutableList<Int>>()
+    for (doc in docs) {
+        tokenPositions.clear()
+        for (token in tokenizer.tokenize(doc.path)) {
+            tokenPositions.computeIfAbsent(token.lexeme) { ArrayList() }.add(token.position)
+        }
+        for ((token, positions) in tokenPositions) {
+            val posting = index.computeIfAbsent(token) { BinPosting(token) }
+            posting.put(doc.id, positions)
         }
     }
-    println("Search took $t milliseconds")
+
+    val flushPath = Paths.get("/home/ceronman/indexes/$shardId.bin")
+    Files.createFile(flushPath)
+    val tokens = index.keys.sorted()
+    Files.newByteChannel(flushPath, StandardOpenOption.WRITE).use { channel ->
+        channel.write(ByteBuffer.allocate(4).putInt(tokens.size))
+        for (t in tokens) {
+            val posting = index[t]!!.close()
+            channel.write(posting)
+        }
+    }
+
+}
+
+private fun index3(shardId: Int, docs: Collection<Doc>) {
+    val shardSize = 100_000
+    val tokenizer = BetterTrigramTokenizer2()
+    val tokenPositions = HashMap<String, MutableList<Int>>()
+    val postings = ArrayList<BinPosting>(shardSize)
+    var c = 0
+    for (doc in docs) {
+        tokenPositions.clear()
+        for (token in tokenizer.tokenize(doc.path)) {
+            tokenPositions.computeIfAbsent(token.lexeme) { ArrayList() }.add(token.position)
+        }
+        for ((token, positions) in tokenPositions) {
+            val posting  = BinPosting(token)
+            posting.put(doc.id, positions)
+            postings.add(BinPosting(token))
+            if (postings.size == shardSize) {
+                postings.sortBy { it.token }
+                val bufferSize = postings.map { it.close().limit() }.sum() + 4
+                val flushPath = Paths.get("/home/ceronman/indexes/${shardId}_$c.bin")
+                Files.createFile(flushPath)
+                val buffer = ByteBuffer.allocate(bufferSize)
+                buffer.putInt(postings.size)
+                for (posting in postings) {
+                    buffer.put(posting.close())
+                }
+                Files.newByteChannel(flushPath, StandardOpenOption.WRITE).use { channel ->
+                    channel.write(buffer)
+                }
+                postings.clear()
+                c++
+            }
+        }
+    }
 }
 
 private fun index(docs: Collection<Doc>): ByteArray {
@@ -127,6 +189,36 @@ class BetterTrigramTokenizer {
         var end = str.offsetByCodePoints(start, 3)
         while (end < str.length) {
             yield(str.substring(start, end))
+            start = str.offsetByCodePoints(start, 1)
+            end = str.offsetByCodePoints(start, 3)
+        }
+    }
+}
+
+class BetterTrigramTokenizer2 {
+    private val decoder = Charsets.UTF_8.newDecoder()
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    fun tokenize(path: Path): Sequence<Token> {
+        val bytes = Files.readAllBytes(path)
+        val string = try {
+            decoder.decode(ByteBuffer.wrap(bytes)).toString()
+        } catch (e: CharacterCodingException) {
+            log.warn("File $path contains malformed unicode, ignoring")
+            return emptySequence()
+        }
+        return tokenize(string)
+    }
+
+    fun tokenize(str: String): Sequence<Token> = sequence {
+        if (str.codePointCount(0, str.length) < 3) {
+            return@sequence
+        }
+
+        var start = 0
+        var end = str.offsetByCodePoints(start, 3)
+        while (end < str.length) {
+            yield(Token(str.substring(start, end), start))
             start = str.offsetByCodePoints(start, 1)
             end = str.offsetByCodePoints(start, 3)
         }
@@ -331,34 +423,58 @@ data class Posting(val token: String, val documents: List<Int>) {
     }
 }
 
-class GrowableByteBuffer(private val ratio: Int) {
-    private var buffer = ByteBuffer.allocate(ratio)
-
-    fun put(value: ByteArray) {
-        if (buffer.remaining() < value.size) {
-            grow()
-        }
-        buffer.put(value)
+class BinPosting(val token: String) {
+    private var buffer = ByteBuffer.allocate(1024)
+    private var numDocsOffset: Int = 0
+    private var numDocs = 0
+    init {
+        val tokenBytes = token.toByteArray(Charsets.UTF_8)
+        buffer.putInt(tokenBytes.size)
+        buffer.put(tokenBytes)
+        buffer.putInt(numDocs)
     }
 
-    fun putInt(value: Int) {
-        if (buffer.remaining() < Int.SIZE_BYTES) {
-            grow()
-        }
-        buffer.putInt(value)
-    }
-
-    fun asBytes(): ByteArray {
+    // Temporal
+    fun capacity() = buffer.capacity()
+    fun remaining() = buffer.remaining()
+    fun close(): ByteBuffer {
         buffer.flip()
-        val result = ByteArray(buffer.limit())
-        buffer.get(result)
-        return result
+        return buffer.asReadOnlyBuffer()
     }
 
-    private fun grow() {
-        val newBuffer = ByteBuffer.allocate(buffer.capacity() + ratio)
-        buffer.flip()
-        newBuffer.put(buffer)
-        buffer = newBuffer
+    fun put(docId: Int, positions: List<Int>) {
+        growIfNeeded(Int.SIZE_BYTES * 2)
+        buffer.putInt(docId)
+        buffer.putInt(positions.size)
+        numDocs++
+        buffer.putInt(numDocsOffset, numDocs)
+        var prev = 0
+        for (position in positions) {
+            putVarInt(position - prev)
+            prev = position
+        }
+    }
+
+    private fun putVarInt(value: Int) {
+        growIfNeeded(5) // Worst case scenario a VarInt requires 5 bytes
+        var v = value
+        while (true) {
+            val bits = v and 0x7f
+            v = v ushr 7
+            if (v == 0) {
+                buffer.put(bits.toByte())
+                return
+            }
+            buffer.put((bits or 0x80).toByte())
+        }
+    }
+
+    private fun growIfNeeded(required: Int) {
+        if (buffer.remaining() < required) {
+            val newBuffer = ByteBuffer.allocate((buffer.capacity() * 1.5).toInt())
+            buffer.flip()
+            newBuffer.put(buffer)
+            buffer = newBuffer
+        }
     }
 }
