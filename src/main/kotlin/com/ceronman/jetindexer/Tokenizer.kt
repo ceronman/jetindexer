@@ -15,15 +15,15 @@ interface ITokenizer {
 }
 
 class TriTokenizer: ITokenizer {
-    private val decoder = Charsets.UTF_8.newDecoder()
     private val log = LoggerFactory.getLogger(javaClass)
 
     override fun tokenize(path: Path): Sequence<Token> {
+        val decoder = Charsets.UTF_8.newDecoder()
         val bytes = Files.readAllBytes(path)
         val string = try {
             decoder.decode(ByteBuffer.wrap(bytes)).toString()
         } catch (e: CharacterCodingException) {
-            log.warn("File $path contains malformed unicode, ignoring")
+            log.warn("File $path does not contain valid UTF-8 text")
             return emptySequence()
         }
         return tokenize(string)

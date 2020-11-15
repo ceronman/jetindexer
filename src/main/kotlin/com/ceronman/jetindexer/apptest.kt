@@ -31,19 +31,19 @@ fun main(args: Array<String>) = runBlocking {
     val paths = FileWalker().walk(listOf(path))
     log.info("Found {} files", paths.size)
 
-    val index = TokenIndex(paths)
+    val index = TokenIndex(paths, TriTokenizer())
 
     var time = measureTimeMillis {
         index.index()
     }
     log.info("Indexing took $time milliseconds (${time.toDouble() / 1000.0} seconds")
 
-//    time = measureTimeMillis {
-//        for (i in 1..100) {
-//            index.search("ParameterTableModelItemBase")
-//        }
-//    }
-//    log.info("100 queries took $time milliseconds ( ${time / 100} per search )")
+    time = measureTimeMillis {
+        for (i in 1..100) {
+            index.search("ParameterTableModelItemBase")
+        }
+    }
+    log.info("100 queries took $time milliseconds ( ${time / 100} per search )")
 
     val result = index.search("ParameterTableModelItemBase")
     val resultsByFile = result.groupBy { it.path }
