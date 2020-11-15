@@ -194,44 +194,44 @@ class JetIndexer(
         return filteredPaths
     }
 
-    private fun walkPaths(paths: Collection<Path>): List<Path> {
-        val allPaths = ArrayList<Path>()
-        for (path in paths) {
-            Files.walkFileTree(path, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
-                object : FileVisitor<Path> {
-                    override fun preVisitDirectory(p: Path, attributes: BasicFileAttributes): FileVisitResult {
-                        // TODO: Don't hardcode this.
-                        if (p.fileName.toString() == ".git") {
-                            log.info("Ignoring .git directory")
-                            return FileVisitResult.SKIP_SUBTREE
+        private fun walkPaths(paths: Collection<Path>): List<Path> {
+            val allPaths = ArrayList<Path>()
+            for (path in paths) {
+                Files.walkFileTree(path, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                    object : FileVisitor<Path> {
+                        override fun preVisitDirectory(p: Path, attributes: BasicFileAttributes): FileVisitResult {
+                            // TODO: Don't hardcode this.
+                            if (p.fileName.toString() == ".git") {
+                                log.info("Ignoring .git directory")
+                                return FileVisitResult.SKIP_SUBTREE
+                            }
+                            log.debug("Scanning directory $p")
+                            return FileVisitResult.CONTINUE
                         }
-                        log.debug("Scanning directory $p")
-                        return FileVisitResult.CONTINUE
-                    }
 
-                    override fun visitFile(p: Path, attributes: BasicFileAttributes): FileVisitResult {
-                        log.debug("Found regular file $p")
-                        allPaths.add(p)
-                        return FileVisitResult.CONTINUE
-                    }
+                        override fun visitFile(p: Path, attributes: BasicFileAttributes): FileVisitResult {
+                            log.debug("Found regular file $p")
+                            allPaths.add(p)
+                            return FileVisitResult.CONTINUE
+                        }
 
-                    override fun visitFileFailed(p: Path, e: IOException?): FileVisitResult {
-                        log.warn("Unable to access file $p: $e")
-                        log.debug("Exception raised", e)
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                    override fun postVisitDirectory(p: Path, e: IOException?): FileVisitResult {
-                        if (e != null) {
-                            log.warn("Error after accessing directory $p")
+                        override fun visitFileFailed(p: Path, e: IOException?): FileVisitResult {
+                            log.warn("Unable to access file $p: $e")
                             log.debug("Exception raised", e)
+                            return FileVisitResult.CONTINUE;
                         }
-                        return FileVisitResult.CONTINUE
-                    }
-                })
+
+                        override fun postVisitDirectory(p: Path, e: IOException?): FileVisitResult {
+                            if (e != null) {
+                                log.warn("Error after accessing directory $p")
+                                log.debug("Exception raised", e)
+                            }
+                            return FileVisitResult.CONTINUE
+                        }
+                    })
+            }
+            return allPaths
         }
-        return allPaths
-    }
 }
 
 sealed class Event

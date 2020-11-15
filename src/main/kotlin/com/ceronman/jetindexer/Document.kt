@@ -7,3 +7,5 @@ class Document(
     val path: Path,
     var attributes: BasicFileAttributes,
 )
+
+data class Doc(val id: Int, val path: Path)
