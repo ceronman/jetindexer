@@ -13,29 +13,36 @@ const val SHARD_INDEX_CAPACITY = 100_000
 
 class TokenIndex(paths: Collection<Path>, private val tokenizer: ITokenizer) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val documents: Map<Int, Doc>
-    private lateinit var shards: List<Shard>
+    private val docsById: MutableMap<Int, Doc>
+    private val docsByPath: MutableMap<Path, Doc>
+    private lateinit var shards: MutableList<Shard>
 
     init {
-        documents = paths.withIndex()
+        docsById = paths.withIndex()
                 .map { (id, path) -> Doc(id + 1, path) }
                 .map { it.id to it }
                 .toMap()
+                .toMutableMap()
+
+        docsByPath = docsById.values
+                .map { it.path to it }
+                .toMap()
+                .toMutableMap()
     }
 
     fun index() = runBlocking {
-        val chunkSize = Math.max(documents.size / 7, 1000)
-        val chunks = documents.values.chunked(chunkSize)
-        log.info("Indexing {} documents in ${chunks.size} chunks of {}", documents.size, chunkSize)
+        val chunkSize = Math.max(docsById.size / 7, 1000)
+        val chunks = docsById.values.chunked(chunkSize)
+        log.info("Indexing {} documents in ${chunks.size} chunks of {}", docsById.size, chunkSize)
 
         val jobs = ArrayList<Deferred<List<Shard>>>()
         for (chunk in chunks) {
             val job = async(Dispatchers.Default) {
-                createShards(chunk, tokenizer)
+                Shard.create(chunk, tokenizer)
             }
             jobs.add(job)
         }
-        shards = jobs.awaitAll().flatten()
+        shards = jobs.awaitAll().flatten().toMutableList()
         log.info("Got ${shards.size} shards")
         shards.forEach { it.load() }
     }
@@ -50,7 +57,23 @@ class TokenIndex(paths: Collection<Path>, private val tokenizer: ITokenizer) {
             return emptyList()
         }
 
-        return mergePostings(postings).map { QueryResult(term, documents[it.docId]!!.path, it.position) }
+        return mergePostings(postings).map { QueryResult(term, docsById[it.docId]!!.path, it.position) }
+    }
+
+    fun deleteDocument(path: Path) {
+        val document = docsByPath[path]
+        if (document == null) {
+            log.warn("Attempting to delete document $path which does not exist in the index")
+            return
+        }
+
+        for (shardId in shards.indices) {
+            shards[shardId] = shards[shardId].withDeletedDocument(document.id)
+            shards[shardId].load()
+        }
+
+        docsByPath.remove(path)
+        docsById.remove(document.id)
     }
 
     private fun query(term: String): PostingListView {
@@ -94,54 +117,6 @@ class TokenIndex(paths: Collection<Path>, private val tokenizer: ITokenizer) {
         }
         return result
     }
-
-    private fun allocateShard(size: Int, postings: HashMap<String, PostingList>): Shard {
-        val tokenOffsets = HashMap<String, IntArray>(postings.size)
-        val shardPath = Files.createTempFile("indexshard", "")
-        Files.newByteChannel(shardPath, StandardOpenOption.WRITE).use { channel ->
-            for ((token, postingList) in postings) {
-                val postingListBuffer = postingList.close()
-                val offset = IntArray(2)
-                offset[0] = channel.position().toInt()
-                offset[1] = postingListBuffer.remaining()
-                tokenOffsets[token] = offset
-                channel.write(postingListBuffer)
-            }
-            // Mark the end of the postings
-            channel.write(ByteBuffer.allocate(1).put(0))
-        }
-        return Shard(shardPath, tokenOffsets)
-    }
-
-    private fun createShards(docs: Collection<Doc>, tokenizer: ITokenizer): List<Shard> {
-        val index = HashMap<String, PostingList>(SHARD_INDEX_CAPACITY)
-        val shards = ArrayList<Shard>()
-        val tokenPositions = HashMap<String, MutableList<Int>>()
-        var shardSize = 0
-        for (doc in docs) {
-            tokenPositions.clear()
-            for (token in tokenizer.tokenize(doc.path)) {
-                tokenPositions.computeIfAbsent(token.lexeme) { ArrayList() }.add(token.position)
-            }
-            for ((token, positions) in tokenPositions) {
-                val posting = index.computeIfAbsent(token) { PostingList() }
-                val bytesWritten = posting.put(doc.id, positions)
-                shardSize += bytesWritten
-            }
-
-            if (shardSize >= SHARD_SIZE_HINT || index.size >= SHARD_INDEX_CAPACITY) {
-                shards.add(allocateShard(shardSize, index))
-                index.clear()
-                shardSize = 0
-            }
-        }
-
-        if (index.isNotEmpty()) {
-            shards.add(allocateShard(shardSize, index))
-        }
-
-        return shards
-    }
 }
 
 internal class Shard(
@@ -156,6 +131,23 @@ internal class Shard(
         buffer = ByteBuffer.wrap(bytes)
     }
 
+    fun withDeletedDocument(idToDelete: Int): Shard {
+        val newPostings = HashMap<String, PostingList>(tokenOffsets.size)
+        for (token in tokenOffsets.keys) {
+            val slice = getPostingSlice(token)!!
+            val view = PostingListView(listOf(slice))
+            val newPostingList = PostingList()
+            val postingsByDocId = view.readPostings().groupBy({ it.docId }, { it.position })
+            for ((docId, positions) in postingsByDocId) {
+                if (docId != idToDelete) {
+                    newPostingList.put(docId, positions)
+                }
+            }
+            newPostings[token] = newPostingList
+        }
+        return write(newPostings)
+    }
+
     fun getPostingSlice(token: String): ByteBuffer? {
         val offset = tokenOffsets[token] ?: return null
         val position = offset[0]
@@ -164,5 +156,55 @@ internal class Shard(
         val slice = buffer.slice()
         slice.limit(size)
         return slice
+    }
+
+    companion object {
+        private fun write(postings: HashMap<String, PostingList>): Shard {
+            val tokenOffsets = HashMap<String, IntArray>(postings.size)
+            val shardPath = Files.createTempFile("indexshard", "")
+            Files.newByteChannel(shardPath, StandardOpenOption.WRITE).use { channel ->
+                for ((token, postingList) in postings) {
+                    val postingListBuffer = postingList.close()
+                    val offset = IntArray(2)
+                    offset[0] = channel.position().toInt()
+                    offset[1] = postingListBuffer.remaining()
+                    tokenOffsets[token] = offset
+                    channel.write(postingListBuffer)
+                }
+                // Mark the end of the postings
+                channel.write(ByteBuffer.allocate(1).put(0))
+            }
+            return Shard(shardPath, tokenOffsets)
+        }
+
+        fun create(docs: Collection<Doc>, tokenizer: ITokenizer): List<Shard> {
+            val index = HashMap<String, PostingList>(SHARD_INDEX_CAPACITY)
+            val shards = ArrayList<Shard>()
+            val tokenPositions = HashMap<String, MutableList<Int>>()
+            var shardSize = 0
+            for (doc in docs) {
+                tokenPositions.clear()
+                for (token in tokenizer.tokenize(doc.path)) {
+                    tokenPositions.computeIfAbsent(token.lexeme) { ArrayList() }.add(token.position)
+                }
+                for ((token, positions) in tokenPositions) {
+                    val posting = index.computeIfAbsent(token) { PostingList() }
+                    val bytesWritten = posting.put(doc.id, positions)
+                    shardSize += bytesWritten
+                }
+
+                if (shardSize >= SHARD_SIZE_HINT || index.size >= SHARD_INDEX_CAPACITY) {
+                    shards.add(write(index))
+                    index.clear()
+                    shardSize = 0
+                }
+            }
+
+            if (index.isNotEmpty()) {
+                shards.add(write(index))
+            }
+
+            return shards
+        }
     }
 }

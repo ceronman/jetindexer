@@ -38,12 +38,17 @@ fun main(args: Array<String>) = runBlocking {
     }
     log.info("Indexing took $time milliseconds (${time.toDouble() / 1000.0} seconds")
 
-    time = measureTimeMillis {
-        for (i in 1..100) {
-            index.search("ParameterTableModelItemBase")
-        }
-    }
-    log.info("100 queries took $time milliseconds ( ${time / 100} per search )")
+//    time = measureTimeMillis {
+//        for (i in 1..100) {
+//            index.search("ParameterTableModelItemBase")
+//        }
+//    }
+//    log.info("100 queries took $time milliseconds ( ${time / 100} per search )")
+
+//    time = measureTimeMillis {
+//        index.deleteDocument(Paths.get("/home/ceronman/code/github/intellij-community/java/java-impl/src/com/intellij/refactoring/changeSignature/JavaParameterTableModel.java"))
+//    }
+//    log.info("Deleting one document took $time milliseconds")
 
     val result = index.search("ParameterTableModelItemBase")
     val resultsByFile = result.groupBy { it.path }

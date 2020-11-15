@@ -75,7 +75,7 @@ internal class PostingListView(private val buffers: List<ByteBuffer>) {
         }
     }
 
-    private fun readPostings(): Sequence<Posting> = sequence {
+    fun readPostings(): Sequence<Posting> = sequence {
         for (buffer in buffers) {
             var docId = buffer.getVarInt()
             while (docId != 0) {
