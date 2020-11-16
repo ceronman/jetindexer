@@ -14,7 +14,6 @@ internal class PostingList {
 
     fun close(): ByteBuffer {
         growIfNeeded(VAR_INT_MAX_SIZE)
-        buffer.putVarInt(0)
         buffer.flip()
         return buffer.asReadOnlyBuffer()
     }
@@ -49,24 +48,24 @@ internal class PostingListView(private val buffers: List<ByteBuffer>) {
         return PostingViewIterator(readPostings().iterator())
     }
 
-    class PostingViewIterator(private val iter: Iterator<Posting>) {
+    class PostingViewIterator(private val iterator: Iterator<Posting>) {
         private var current: Posting?
 
         init {
-            if (iter.hasNext()) {
-                current = iter.next()
+            if (iterator.hasNext()) {
+                current = iterator.next()
             } else {
                 current = null
             }
         }
 
         fun hasNext(): Boolean {
-            return iter.hasNext()
+            return iterator.hasNext()
         }
 
         fun next(): Posting {
             val old = current
-            current= iter.next()
+            current= iterator.next()
             return old!!
         }
 
@@ -77,8 +76,8 @@ internal class PostingListView(private val buffers: List<ByteBuffer>) {
 
     fun readPostings(): Sequence<Posting> = sequence {
         for (buffer in buffers) {
-            var docId = buffer.getVarInt()
-            while (docId != 0) {
+            while (buffer.hasRemaining()) {
+                val docId = buffer.getVarInt()
                 val numPositions = buffer.getVarInt()
                 var prev = 0
                 for (j in 0 until numPositions) {
@@ -86,7 +85,6 @@ internal class PostingListView(private val buffers: List<ByteBuffer>) {
                     yield(Posting(docId, position))
                     prev = position
                 }
-                docId = buffer.getVarInt()
             }
         }
     }

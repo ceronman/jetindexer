@@ -31,12 +31,14 @@ fun main(args: Array<String>) = runBlocking {
     val paths = FileWalker().walk(listOf(path))
     log.info("Found {} files", paths.size)
 
-    val index = TokenIndex(paths, TriTokenizer())
+    val index = TokenIndex(TriTokenizer())
 
     var time = measureTimeMillis {
-        index.index()
+        index.addBatch(paths)
     }
     log.info("Indexing took $time milliseconds (${time.toDouble() / 1000.0} seconds")
+
+    index.delete(Paths.get("/home/ceronman/code/github/intellij-community/java/java-impl/src/com/intellij/refactoring/changeSignature/JavaParameterTableModel.java"))
 
 //    time = measureTimeMillis {
 //        for (i in 1..100) {

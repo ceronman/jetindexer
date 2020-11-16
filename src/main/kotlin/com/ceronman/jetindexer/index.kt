@@ -6,34 +6,36 @@ import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.max
 
 const val SHARD_SIZE_HINT = 50_000_000
 const val SHARD_INDEX_CAPACITY = 100_000
+const val MIN_CHUNK_SIZE = 1000
+private val MAX_WORKERS = Runtime.getRuntime().availableProcessors()
 
 
-class TokenIndex(paths: Collection<Path>, private val tokenizer: ITokenizer) {
+class TokenIndex(private val tokenizer: ITokenizer) {
+    private val idGenerator = AtomicInteger(1)
     private val log = LoggerFactory.getLogger(javaClass)
-    private val docsById: MutableMap<Int, Doc>
-    private val docsByPath: MutableMap<Path, Doc>
-    private lateinit var shards: MutableList<Shard>
+    private val documentsById = HashMap<Int, Doc>()
+    private val documentsByPath = HashMap<Path, Doc>()
+    private val shards = ArrayList<Shard>()
 
-    init {
-        docsById = paths.withIndex()
-                .map { (id, path) -> Doc(id + 1, path) }
-                .map { it.id to it }
-                .toMap()
-                .toMutableMap()
-
-        docsByPath = docsById.values
-                .map { it.path to it }
-                .toMap()
-                .toMutableMap()
+    private fun createDocument(path: Path): Doc {
+        val doc = Doc(idGenerator.getAndIncrement(), path)
+        documentsById[doc.id] = doc
+        documentsByPath[path] = doc
+        return doc
     }
 
-    fun index() = runBlocking {
-        val chunkSize = Math.max(docsById.size / 7, 1000)
-        val chunks = docsById.values.chunked(chunkSize)
-        log.info("Indexing {} documents in ${chunks.size} chunks of {}", docsById.size, chunkSize)
+    fun addBatch(paths: Collection<Path>) = runBlocking {
+        val newDocuments = paths.map { createDocument(it) }
+
+        val chunkSize = max(newDocuments.size / MAX_WORKERS, MIN_CHUNK_SIZE)
+        val chunks = newDocuments.chunked(chunkSize)
+
+        log.info("Indexing {} documents in ${chunks.size} chunks of {}", newDocuments.size, chunkSize)
 
         val jobs = ArrayList<Deferred<List<Shard>>>()
         for (chunk in chunks) {
@@ -42,9 +44,28 @@ class TokenIndex(paths: Collection<Path>, private val tokenizer: ITokenizer) {
             }
             jobs.add(job)
         }
-        shards = jobs.awaitAll().flatten().toMutableList()
-        log.info("Got ${shards.size} shards")
-        shards.forEach { it.load() }
+        val results = jobs.awaitAll().flatten()
+        results.forEach { it.load() }
+        shards.addAll(results)
+    }
+
+    fun add(path: Path) {
+
+    }
+
+    fun delete(path: Path) {
+        val document = documentsByPath[path]
+        if (document == null) {
+            log.warn("Attempting to delete a file not indexed: {}", path)
+            return
+        }
+        documentsById.remove(document.id)
+        documentsByPath.remove(path)
+    }
+
+    fun update(path: Path) {
+        delete(path)
+        add(path)
     }
 
     fun search(term: String): List<QueryResult> {
@@ -57,23 +78,9 @@ class TokenIndex(paths: Collection<Path>, private val tokenizer: ITokenizer) {
             return emptyList()
         }
 
-        return mergePostings(postings).map { QueryResult(term, docsById[it.docId]!!.path, it.position) }
-    }
-
-    fun deleteDocument(path: Path) {
-        val document = docsByPath[path]
-        if (document == null) {
-            log.warn("Attempting to delete document $path which does not exist in the index")
-            return
-        }
-
-        for (shardId in shards.indices) {
-            shards[shardId] = shards[shardId].withDeletedDocument(document.id)
-            shards[shardId].load()
-        }
-
-        docsByPath.remove(path)
-        docsById.remove(document.id)
+        return mergePostings(postings)
+                .filter { posting -> documentsById.containsKey(posting.docId) }
+                .map { posting -> QueryResult(term, documentsById[posting.docId]!!.path, posting.position) }
     }
 
     private fun query(term: String): PostingListView {
@@ -129,23 +136,6 @@ internal class Shard(
         val bytes = Files.readAllBytes(path)
         Files.deleteIfExists(path)
         buffer = ByteBuffer.wrap(bytes)
-    }
-
-    fun withDeletedDocument(idToDelete: Int): Shard {
-        val newPostings = HashMap<String, PostingList>(tokenOffsets.size)
-        for (token in tokenOffsets.keys) {
-            val slice = getPostingSlice(token)!!
-            val view = PostingListView(listOf(slice))
-            val newPostingList = PostingList()
-            val postingsByDocId = view.readPostings().groupBy({ it.docId }, { it.position })
-            for ((docId, positions) in postingsByDocId) {
-                if (docId != idToDelete) {
-                    newPostingList.put(docId, positions)
-                }
-            }
-            newPostings[token] = newPostingList
-        }
-        return write(newPostings)
     }
 
     fun getPostingSlice(token: String): ByteBuffer? {
