@@ -6,27 +6,50 @@ import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.*
 import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 
 interface IndexingFilter {
     fun shouldIndex(path: Path): Boolean
 }
 
 class DefaultIndexingFilter: IndexingFilter {
+    private val goodExtensionsRegex = Regex("""
+        \.(
+            ant | bat | c | cgi | coffee | cpp | cs | d | fish | flake8 | flex | gradle | graphql | groovy | 
+            h | hpp | java | jql | js | json | jsp | jsx | kt | log | php | py | sh | swift | tcl | vb | yml
+        )$
+    """.trimIndent(), RegexOption.COMMENTS)
+
+    private val goodMimeTypes = Regex("""
+        text | xml | json
+    """.trimIndent(), RegexOption.COMMENTS)
+
+    private val badDirectoryRegex = Regex("""
+        ^( \.git | \.idea )$
+    """.trimIndent(), RegexOption.COMMENTS)
+
     override fun shouldIndex(path: Path): Boolean {
-        if (Files.isDirectory(path) && path.fileName.toString() == ".git") {
-            return false
-        }
+        if (Files.isDirectory(path)) {
+            if (badDirectoryRegex.find(path.toString()) != null) {
+                return false
+            }
+            return true
+        } else {
+            val contentType = Files.probeContentType(path)
+            if (contentType == null && goodExtensionsRegex.find(path.fileName.toString()) == null) {
+                return false
+            }
 
-        val contentType = Files.probeContentType(path)
-        if (!contentType.contains("text")) {
-            return false
-        }
+            if (contentType != null && goodMimeTypes.find(contentType) == null) {
+                return false
+            }
 
-        if (Files.size(path) > 50_000_000) {
-            return false
-        }
+            if (Files.size(path) > 50_000_000) {
+                return false
+            }
 
-        return true
+            return true
+        }
     }
 }
 
@@ -40,11 +63,11 @@ class FileWalker(private val filter: IndexingFilter = DefaultIndexingFilter()) {
                     object : FileVisitor<Path> {
                         override fun preVisitDirectory(p: Path, attributes: BasicFileAttributes): FileVisitResult {
                             if (filter.shouldIndex(p)) {
-                                log.debug("Skipping directory {} by indexing filter", p)
-                                return FileVisitResult.SKIP_SUBTREE
-                            } else {
                                 log.debug("Scanning directory {}", p)
                                 return FileVisitResult.CONTINUE
+                            } else {
+                                log.debug("Skipping directory {} by indexing filter", p)
+                                return FileVisitResult.SKIP_SUBTREE
                             }
                         }
 

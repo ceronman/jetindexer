@@ -18,7 +18,7 @@ internal class JetIndexerTest {
     @TempDir
     @JvmField
     var tempDirField: Path? = null
-    private val tempDir: Path get() = tempDirField!!
+    private val tempDir: Path get() = tempDirField!!.toRealPath()
 
     private lateinit var indexer: JetIndexer
     private lateinit var indexerJob: Job
@@ -327,7 +327,11 @@ internal class JetIndexerTest {
     }
 
     private fun initIndexer(paths: List<Path> = listOf(tempDir)) {
-        indexer = JetIndexer(WhiteSpaceTokenizer(), StandardQueryResolver(), DefaultIndexingFilter(), paths)
+        indexer = JetIndexer(
+            WhiteSpaceTokenizer(),
+            StandardQueryResolver(),
+            DefaultIndexingFilter(),
+            paths)
 
         indexerJob = GlobalScope.launch {
             indexer.index()
@@ -341,7 +345,7 @@ internal class JetIndexerTest {
     }
 
     private fun writeFile(dir: Path, contents: String): Path {
-        val path = Files.createTempFile(dir, "test", "test")
+        val path = Files.createTempFile(dir.toRealPath(), "test", "test")
         path.toFile().writeText(contents)
         return path
     }

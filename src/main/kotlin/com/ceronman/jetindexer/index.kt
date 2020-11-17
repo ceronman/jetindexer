@@ -72,6 +72,8 @@ class TokenIndex(private val tokenizer: Tokenizer) {
     }
 
     fun add(path: Path) = rwLock.write {
+        log.info("Added {} to the index", path)
+
         val document = createDocument(path)
         shardWriter.add(document)
 
@@ -84,6 +86,7 @@ class TokenIndex(private val tokenizer: Tokenizer) {
     }
 
     fun delete(path: Path) = rwLock.write {
+        log.info("Removed {} to the index", path)
         val document = documentsByPath[path]
         if (document == null) {
             log.warn("Attempting to delete a file not indexed: {}", path)
@@ -94,8 +97,13 @@ class TokenIndex(private val tokenizer: Tokenizer) {
     }
 
     fun update(path: Path) = rwLock.write {
-        delete(path)
-        add(path)
+        log.info("Will update {} to the index", path)
+        if (documentsByPath.containsKey(path)) {
+            delete(path)
+            add(path)
+        } else {
+            log.warn("Attempting to update document {} that is not in the index", 0)
+        }
     }
 
     fun rawQuery(term: String): PostingListView = rwLock.read {

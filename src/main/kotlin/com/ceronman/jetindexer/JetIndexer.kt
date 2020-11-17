@@ -46,7 +46,9 @@ class JetIndexer(
                     when (event.eventType()) {
                         DirectoryChangeEvent.EventType.CREATE -> {
                             log.info("Watcher create event ${event.path()}")
-                            index.add(event.path())
+                            if (Files.isRegularFile(event.path())) {
+                                index.add(event.path())
+                            }
                         }
                         DirectoryChangeEvent.EventType.DELETE -> {
                             log.info("Watcher delete event ${event.path()}")
@@ -54,10 +56,12 @@ class JetIndexer(
                         }
                         DirectoryChangeEvent.EventType.MODIFY -> {
                             log.info("Watcher modify event ${event.path()}")
-                            index.update(event.path())
+                            if (Files.isRegularFile(event.path())) {
+                                index.update(event.path())
+                            }
                         }
                         DirectoryChangeEvent.EventType.OVERFLOW -> {
-                            log.info("Watcher overflow event")
+                            log.warn("File watcher overflowed!")
                         }
                     }
 
@@ -101,7 +105,7 @@ class JetIndexer(
                 log.warn("Path $path does not exit. Ignoring")
                 continue
             }
-            filteredPaths.add(path)
+            filteredPaths.add(path.toAbsolutePath())
         }
         return filteredPaths
     }
