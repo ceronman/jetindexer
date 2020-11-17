@@ -33,10 +33,10 @@ fun main(args: Array<String>) = runBlocking {
     log.info("Indexing took $time milliseconds (${time.toDouble() / 1000.0} seconds")
 
 
-    val updatePaths = paths.slice(0..10000)
-    for (p in updatePaths) {
-        index.update(p)
-    }
+//    val updatePaths = paths.slice(0..10000)
+//    for (p in updatePaths) {
+//        index.update(p)
+//    }
 
 //    time = measureTimeMillis {
 //        for (i in 1..100) {
@@ -48,13 +48,20 @@ fun main(args: Array<String>) = runBlocking {
     val queryResolver = TrigramSubstringQueryResolver(index)
 //    val queryResolver = StandardQueryResolver(index)
 
-    val result = queryResolver.search("public")
-//    val result = queryResolver.search("ParameterTableModelItemBase")
-    val resultsByFile = result.groupBy { it.path }
-    for ((path, posting) in resultsByFile) {
-        println(path)
-        for (p in posting) {
-            println(p.position)
+    for (i in 0 until 100) {
+        launch(Dispatchers.Default) {
+            queryResolver.search("ParameterTableModelItemBase")
         }
     }
+
+//    val result = queryResolver.search("public")
+//    val result = queryResolver.search("ParameterTableModelItemBase")
+//    val resultsByFile = result.groupBy { it.path }
+//    for ((path, posting) in resultsByFile) {
+//        println(path)
+//        for (p in posting) {
+//            println(p.position)
+//        }
+//    }
+
 }

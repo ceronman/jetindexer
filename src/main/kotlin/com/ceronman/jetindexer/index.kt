@@ -7,6 +7,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 import kotlin.math.max
 
 const val SHARD_SIZE_HINT = 50_000_000
@@ -21,6 +24,7 @@ class TokenIndex(private val tokenizer: ITokenizer) {
     private val documentsByPath = HashMap<Path, Doc>()
     private val shards = ArrayList<Shard>()
     private val shardWriter = ShardWriter(tokenizer)
+    private val rwLock = ReentrantReadWriteLock()
 
     private fun createDocument(path: Path): Doc {
         val doc = Doc(idGenerator.getAndIncrement(), path)
@@ -46,7 +50,10 @@ class TokenIndex(private val tokenizer: ITokenizer) {
         }
         val results = jobs.awaitAll().flatten()
         results.forEach { it.load() }
-        shards.addAll(results)
+
+        rwLock.write {
+            shards.addAll(results)
+        }
     }
 
     private fun addBatchJob(documents: Collection<Doc>): List<Shard> {
@@ -64,7 +71,7 @@ class TokenIndex(private val tokenizer: ITokenizer) {
         return shards
     }
 
-    fun add(path: Path) {
+    fun add(path: Path) = rwLock.write {
         val document = createDocument(path)
         shardWriter.add(document)
 
@@ -76,22 +83,22 @@ class TokenIndex(private val tokenizer: ITokenizer) {
         }
     }
 
-    fun delete(path: Path) {
+    fun delete(path: Path) = rwLock.write {
         val document = documentsByPath[path]
         if (document == null) {
             log.warn("Attempting to delete a file not indexed: {}", path)
-            return
+        } else {
+            documentsById.remove(document.id)
+            documentsByPath.remove(path)
         }
-        documentsById.remove(document.id)
-        documentsByPath.remove(path)
     }
 
-    fun update(path: Path) {
+    fun update(path: Path) = rwLock.write {
         delete(path)
         add(path)
     }
 
-    fun rawQuery(term: String): PostingListView {
+    fun rawQuery(term: String): PostingListView = rwLock.read {
         val buffers = shards.mapNotNull { it.getPostingSlice(term) }.toMutableList()
         val posting = shardWriter.getPostingSlice(term)
         if (posting != null) {
@@ -100,7 +107,7 @@ class TokenIndex(private val tokenizer: ITokenizer) {
         return PostingListView(buffers)
     }
 
-    fun documentPath(docId: Int): Path? {
+    fun documentPath(docId: Int): Path? = rwLock.read {
         return documentsById[docId]?.path
     }
 }
@@ -170,8 +177,9 @@ internal class Shard(
         val offset = tokenOffsets[token] ?: return null
         val position = offset[0]
         val size = offset[1]
-        buffer.position(position)
-        val slice = buffer.slice()
+        val copy = buffer.duplicate()
+        copy.position(position)
+        val slice = copy.slice()
         slice.limit(size)
         return slice
     }
