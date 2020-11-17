@@ -150,7 +150,6 @@ class TokenIndex(private val tokenizer: ITokenizer) {
 }
 
 internal class ShardWriter(private val tokenizer: ITokenizer) {
-    private val shards = ArrayList<Shard>()
     private val postings = HashMap<String, PostingList>(SHARD_INDEX_CAPACITY)
     private val tokenPositions = HashMap<String, MutableList<Int>>(2048)
     private var size = 0
@@ -219,55 +218,5 @@ internal class Shard(
         val slice = buffer.slice()
         slice.limit(size)
         return slice
-    }
-
-    companion object {
-        private fun write(postings: HashMap<String, PostingList>): Shard {
-            val tokenOffsets = HashMap<String, IntArray>(postings.size)
-            val shardPath = Files.createTempFile("indexshard", "")
-            Files.newByteChannel(shardPath, StandardOpenOption.WRITE).use { channel ->
-                for ((token, postingList) in postings) {
-                    val postingListBuffer = postingList.close()
-                    val offset = IntArray(2)
-                    offset[0] = channel.position().toInt()
-                    offset[1] = postingListBuffer.remaining()
-                    tokenOffsets[token] = offset
-                    channel.write(postingListBuffer)
-                }
-                // Mark the end of the postings
-                channel.write(ByteBuffer.allocate(1).put(0))
-            }
-            return Shard(shardPath, tokenOffsets)
-        }
-
-        fun create(docs: Collection<Doc>, tokenizer: ITokenizer): List<Shard> {
-            val index = HashMap<String, PostingList>(SHARD_INDEX_CAPACITY)
-            val shards = ArrayList<Shard>()
-            val tokenPositions = HashMap<String, MutableList<Int>>()
-            var shardSize = 0
-            for (doc in docs) {
-                tokenPositions.clear()
-                for (token in tokenizer.tokenize(doc.path)) {
-                    tokenPositions.computeIfAbsent(token.lexeme) { ArrayList() }.add(token.position)
-                }
-                for ((token, positions) in tokenPositions) {
-                    val posting = index.computeIfAbsent(token) { PostingList() }
-                    val bytesWritten = posting.put(doc.id, positions)
-                    shardSize += bytesWritten
-                }
-
-                if (shardSize >= SHARD_SIZE_HINT || index.size >= SHARD_INDEX_CAPACITY) {
-                    shards.add(write(index))
-                    index.clear()
-                    shardSize = 0
-                }
-            }
-
-            if (index.isNotEmpty()) {
-                shards.add(write(index))
-            }
-
-            return shards
-        }
     }
 }
