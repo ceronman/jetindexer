@@ -2,14 +2,7 @@ package com.ceronman.jetindexer
 
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
-import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
 import java.nio.file.*
-import java.nio.file.attribute.BasicFileAttributes
-import java.util.*
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
 import kotlin.system.measureTimeMillis
 
 private val log = LoggerFactory.getLogger("app")
@@ -32,6 +25,7 @@ fun main(args: Array<String>) = runBlocking {
     log.info("Found {} files", paths.size)
 
     val index = TokenIndex(TriTokenizer())
+//    val index = TokenIndex(WsTokenizer())
 
     var time = measureTimeMillis {
         index.addBatch(paths)
@@ -51,7 +45,11 @@ fun main(args: Array<String>) = runBlocking {
 //    }
 //    log.info("100 queries took $time milliseconds ( ${time / 100} per search )")
 
-    val result = index.search("ParameterTableModelItemBase")
+    val queryResolver = TrigramSubstringQueryResolver(index)
+//    val queryResolver = StandardQueryResolver(index)
+
+    val result = queryResolver.search("public")
+//    val result = queryResolver.search("ParameterTableModelItemBase")
     val resultsByFile = result.groupBy { it.path }
     for ((path, posting) in resultsByFile) {
         println(path)

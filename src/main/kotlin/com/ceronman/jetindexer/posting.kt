@@ -47,7 +47,7 @@ internal class PostingList {
     }
 }
 
-internal class PostingListView(private val buffers: List<ByteBuffer>) {
+class PostingListView(private val buffers: List<ByteBuffer>) {
 
     fun peekableIterator(): PostingViewIterator {
         return PostingViewIterator(readPostings().iterator())

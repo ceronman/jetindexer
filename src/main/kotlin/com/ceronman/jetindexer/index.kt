@@ -14,7 +14,6 @@ const val SHARD_INDEX_CAPACITY = 100_000
 const val MIN_CHUNK_SIZE = 1000
 private val MAX_WORKERS = Runtime.getRuntime().availableProcessors()
 
-
 class TokenIndex(private val tokenizer: ITokenizer) {
     private val idGenerator = AtomicInteger(1)
     private val log = LoggerFactory.getLogger(javaClass)
@@ -92,19 +91,7 @@ class TokenIndex(private val tokenizer: ITokenizer) {
         add(path)
     }
 
-    fun search(term: String): List<QueryResult> {
-        val postings = TriTokenizer().tokenize(term).map { query(it.lexeme) }.toList()
-
-        if (postings.isEmpty()) {
-            return emptyList()
-        }
-
-        return mergePostings(postings)
-                .filter { posting -> documentsById.containsKey(posting.docId) }
-                .map { posting -> QueryResult(term, documentsById[posting.docId]!!.path, posting.position) }
-    }
-
-    private fun query(term: String): PostingListView {
+    fun rawQuery(term: String): PostingListView {
         val buffers = shards.mapNotNull { it.getPostingSlice(term) }.toMutableList()
         val posting = shardWriter.getPostingSlice(term)
         if (posting != null) {
@@ -113,39 +100,8 @@ class TokenIndex(private val tokenizer: ITokenizer) {
         return PostingListView(buffers)
     }
 
-    private fun mergePostings(postings: List<PostingListView>): List<Posting> {
-        val numLists = postings.size
-        val result = ArrayList<Posting>()
-        val iterators = postings.map { it.peekableIterator() }
-        while (iterators.all { it.hasNext() }) {
-            val firstPosting = iterators[0].peek()
-            var equals = true
-            for (i in 1 until numLists) {
-                val currentPosting = iterators[i].peek()
-                if (firstPosting.docId < currentPosting.docId) {
-                    while (iterators[0].hasNext() && iterators[0].peek().docId < currentPosting.docId) {
-                        iterators[0].next()
-                    }
-                } else if (currentPosting.docId < firstPosting.docId) {
-                    while (iterators[i].hasNext() && iterators[i].peek().docId < firstPosting.docId) {
-                        iterators[i].next()
-                    }
-                } else if (firstPosting.position < currentPosting.position - i) {
-                    iterators[0].next()
-                } else if (firstPosting.position > currentPosting.position - i) {
-                    iterators[i].next()
-                } else {
-                    continue
-                }
-                equals = false
-                break
-            }
-            if (equals) {
-                iterators.forEach { it.next() }
-                result.add(firstPosting)
-            }
-        }
-        return result
+    fun documentPath(docId: Int): Path? {
+        return documentsById[docId]?.path
     }
 }
 
