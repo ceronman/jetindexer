@@ -13,9 +13,14 @@ internal class PostingList {
     }
 
     fun close(): ByteBuffer {
-        growIfNeeded(VAR_INT_MAX_SIZE)
         buffer.flip()
         return buffer.asReadOnlyBuffer()
+    }
+
+    fun asReadOnly(): ByteBuffer {
+        val buf = buffer.duplicate()
+        buf.flip()
+        return buf.asReadOnlyBuffer()
     }
 
     fun put(docId: Int, positions: List<Int>): Int {
@@ -60,17 +65,21 @@ internal class PostingListView(private val buffers: List<ByteBuffer>) {
         }
 
         fun hasNext(): Boolean {
-            return iterator.hasNext()
+            return current != null
         }
 
         fun next(): Posting {
             val old = current
-            current= iterator.next()
-            return old!!
+            if (iterator.hasNext()) {
+                current = iterator.next()
+            } else {
+                current = null
+            }
+            return old ?: throw NoSuchElementException("Iterator doesn't have next")
         }
 
         fun peek(): Posting {
-            return current!!
+            return current ?: throw NoSuchElementException("Iterator doesn't have current")
         }
     }
 
