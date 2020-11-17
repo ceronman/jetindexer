@@ -4,7 +4,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.takeWhile
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.*
 import java.util.concurrent.ThreadLocalRandom
 import kotlin.test.assertEquals
 
@@ -329,7 +327,7 @@ internal class JetIndexerTest {
     }
 
     private fun initIndexer(paths: List<Path> = listOf(tempDir)) {
-        indexer = JetIndexer(WhiteSpaceTokenizer(), paths)
+        indexer = JetIndexer(WhiteSpaceTokenizer(), StandardQueryResolver(), DefaultIndexingFilter(), paths)
 
         indexerJob = GlobalScope.launch {
             indexer.index()

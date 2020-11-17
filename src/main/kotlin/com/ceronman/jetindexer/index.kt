@@ -17,17 +17,17 @@ const val SHARD_INDEX_CAPACITY = 100_000
 const val MIN_CHUNK_SIZE = 1000
 private val MAX_WORKERS = Runtime.getRuntime().availableProcessors()
 
-class TokenIndex(private val tokenizer: ITokenizer) {
+class TokenIndex(private val tokenizer: Tokenizer) {
     private val idGenerator = AtomicInteger(1)
     private val log = LoggerFactory.getLogger(javaClass)
-    private val documentsById = HashMap<Int, Doc>()
-    private val documentsByPath = HashMap<Path, Doc>()
+    private val documentsById = HashMap<Int, Document>()
+    private val documentsByPath = HashMap<Path, Document>()
     private val shards = ArrayList<Shard>()
     private val shardWriter = ShardWriter(tokenizer)
     private val rwLock = ReentrantReadWriteLock()
 
-    private fun createDocument(path: Path): Doc {
-        val doc = Doc(idGenerator.getAndIncrement(), path)
+    private fun createDocument(path: Path): Document {
+        val doc = Document(idGenerator.getAndIncrement(), path)
         documentsById[doc.id] = doc
         documentsByPath[path] = doc
         return doc
@@ -56,7 +56,7 @@ class TokenIndex(private val tokenizer: ITokenizer) {
         }
     }
 
-    private fun addBatchJob(documents: Collection<Doc>): List<Shard> {
+    private fun addBatchJob(documents: Collection<Document>): List<Shard> {
         val shards = ArrayList<Shard>()
         val index = ShardWriter(tokenizer)
         for (doc in documents) {
@@ -112,12 +112,14 @@ class TokenIndex(private val tokenizer: ITokenizer) {
     }
 }
 
-internal class ShardWriter(private val tokenizer: ITokenizer) {
+data class Document(val id: Int, val path: Path)
+
+internal class ShardWriter(private val tokenizer: Tokenizer) {
     private val postings = HashMap<String, PostingList>(SHARD_INDEX_CAPACITY)
     private val tokenPositions = HashMap<String, MutableList<Int>>(2048)
     private var size = 0
 
-    fun add(document: Doc) {
+    fun add(document: Document) {
         tokenPositions.clear()
         for (token in tokenizer.tokenize(document.path)) {
             tokenPositions.computeIfAbsent(token.lexeme) { ArrayList() }.add(token.position)

@@ -24,7 +24,7 @@ fun main(args: Array<String>) = runBlocking {
     val paths = FileWalker().walk(listOf(path))
     log.info("Found {} files", paths.size)
 
-    val index = TokenIndex(TriTokenizer())
+    val index = TokenIndex(TrigramTokenizer())
 //    val index = TokenIndex(WsTokenizer())
 
     var time = measureTimeMillis {
@@ -45,12 +45,12 @@ fun main(args: Array<String>) = runBlocking {
 //    }
 //    log.info("100 queries took $time milliseconds ( ${time / 100} per search )")
 
-    val queryResolver = TrigramSubstringQueryResolver(index)
+    val queryResolver = TrigramSubstringQueryResolver()
 //    val queryResolver = StandardQueryResolver(index)
 
     for (i in 0 until 100) {
         launch(Dispatchers.Default) {
-            queryResolver.search("ParameterTableModelItemBase")
+            queryResolver.search(index,"ParameterTableModelItemBase")
         }
     }
 

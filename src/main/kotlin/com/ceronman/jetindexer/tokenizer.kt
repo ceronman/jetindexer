@@ -5,16 +5,17 @@ import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Path
 
-interface Tokenizer {
-    fun tokenize(input: Sequence<Char>): Sequence<Token>
-}
+data class Token(
+        val lexeme: String,
+        val position: Int
+)
 
 // TODO: Handle tokenization errors
-interface ITokenizer {
+interface Tokenizer {
     fun tokenize(path: Path): Sequence<Token>
 }
 
-class TriTokenizer: ITokenizer {
+class TrigramTokenizer: Tokenizer {
     private val log = LoggerFactory.getLogger(javaClass)
 
     override fun tokenize(path: Path): Sequence<Token> {
@@ -41,10 +42,11 @@ class TriTokenizer: ITokenizer {
             start = str.offsetByCodePoints(start, 1)
             end = str.offsetByCodePoints(start, 3)
         }
+        yield(Token(str.substring(start, end), start))
     }
 }
 
-class WsTokenizer: ITokenizer {
+class WhiteSpaceTokenizer: Tokenizer {
     override fun tokenize(path: Path): Sequence<Token> = sequence {
         val bytes = Files.readAllBytes(path)
         val string = String(bytes, Charsets.UTF_8)

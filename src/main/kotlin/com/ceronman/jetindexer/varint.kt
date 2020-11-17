@@ -15,7 +15,6 @@ fun ByteBuffer.putVarInt(value: Int): ByteBuffer {
         }
         this.put((bits or 0x80).toByte())
     }
-    return this
 }
 
 fun ByteBuffer.getVarInt(): Int {

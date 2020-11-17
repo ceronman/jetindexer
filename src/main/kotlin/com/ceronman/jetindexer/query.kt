@@ -1,11 +1,19 @@
 package com.ceronman.jetindexer
 
+import java.nio.file.Path
+
+data class QueryResult(
+        val term: String,
+        val path: Path,
+        val position: Int
+)
+
 interface QueryResolver {
-    fun search(term: String): List<QueryResult>
+    fun search(index: TokenIndex, term: String): List<QueryResult>
 }
 
-class StandardQueryResolver(private val index: TokenIndex): QueryResolver {
-    override fun search(term: String): List<QueryResult> {
+class StandardQueryResolver(): QueryResolver {
+    override fun search(index: TokenIndex, term: String): List<QueryResult> {
         val view = index.rawQuery(term)
         return view.readPostings()
                 .filter { index.documentPath(it.docId) != null }
@@ -14,11 +22,11 @@ class StandardQueryResolver(private val index: TokenIndex): QueryResolver {
     }
 }
 
-class TrigramSubstringQueryResolver(private val index: TokenIndex): QueryResolver {
-    private val tokenizer = TriTokenizer()
+class TrigramSubstringQueryResolver(): QueryResolver {
+    private val tokenizer = TrigramTokenizer()
 
-    override fun search(term: String): List<QueryResult> {
-        val postings = TriTokenizer().tokenize(term).map { index.rawQuery(it.lexeme) }.toList()
+    override fun search(index: TokenIndex, term: String): List<QueryResult> {
+        val postings = tokenizer.tokenize(term).map { index.rawQuery(it.lexeme) }.toList()
 
         if (postings.isEmpty()) {
             return emptyList()
