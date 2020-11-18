@@ -28,11 +28,11 @@ import kotlin.math.max
 
 // These are some constants with some sane defaults regarding index shard sizes.
 
-// A size hint of how big a shard should be. It's just a hit, the shard might end up being slightly bigger
-// because a shard must all of the tokens of a given file.
+// A size hint of how big a shard should be. It's just a hint, the shard might end up being slightly bigger
+// because a shard must have all of the tokens of a given file.
 private const val SHARD_SIZE_HINT = 50_000_000
 
-// A size hint of in-memory indexer hashmap. This is the number of tokens that should be indexed before
+// A size hint for the in-memory indexer hashmap. This is the number of tokens that should be indexed before
 // dumping the shard to disk.
 private const val SHARD_INDEX_CAPACITY = 100_000
 
@@ -63,7 +63,7 @@ typealias ProgressCallback = ((Int) -> Unit)?
  * document id from the internal list of documents and add it as a new file with a new file id.
  *
  * Queries to the index should take care of verifying that the results are still officially part of
- * the index. This is done by a highlevel interface such as [QueryResolver].
+ * the index. This is done by a higher level interface such as [QueryResolver].
  *
  * @param tokenizer A [Tokenizer] object that will be used to split the file in tokens.
  *
@@ -201,7 +201,7 @@ class InvertedIndex(private val tokenizer: Tokenizer) {
 
     /**
      * Convenience method to create a new document.
-     * Thread safety warning: Synchronization is required before calling this method.
+     * Thread safety warning: Synchronization is required before calling this private method.
      */
     private fun createDocument(path: Path): Document {
         val doc = Document(idGenerator.getAndIncrement(), path)
@@ -328,7 +328,7 @@ internal class ShardWriter(private val tokenizer: Tokenizer) {
  * Ideally, this should not load the entire shard but just a fraction of it using a memory
  * mapped file or some similar strategy.
  *
- * The shard also contains an internal map of token to offsets in the file. This are used
+ * The shard also contains an internal map of token to offsets in the file. These are used
  * to get a slice of the bytes particular posting list for a given token.
  *
  * @see [PostingList]

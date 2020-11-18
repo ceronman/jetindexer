@@ -2,7 +2,7 @@
 
 A text search engine library for Kotlin.
 
-JetIndexer takes a list of directories and it indexes text files contained in those
+**JetIndexer** takes a list of directories and it indexes text files contained in those
 recursively. Additionally, it can watch those directories for changes and update
 the index accordingly. Once the index is built it is possible to search text
 in the indexed files in a fast way.
@@ -27,16 +27,16 @@ val indexer = JetIndexer(
 indexer.index()
 ``` 
 
-In this example a `TrigramTokenizer` will be used, which will split the text in trigrams
-For example, if a file contains the word *kotlin*. This would be tokenized as 
+In this example a `TrigramTokenizer` will be used, which will split the text in trigrams.
+For example, if a file contains the word *kotlin*, this would be tokenized as 
 `("kot", "otl", "tli", "lin")`. This allows for searching substrings in the index using the
 corresponding `TrigramSubstringQueryResolver`.
 
-The `DefaultIndexingFilter` will index only files that look like text and skip binary formats.
+The `DefaultIndexingFilter` will index only files that look like text and it will skip binary formats.
 
 Optionally, you can start a file watcher that will observer the filesystem and react to files
 added or updated and add them to the index. This can be done using the `indexer.watch()` method.
-This method blocks, so it's recommended to called from a coroutine:
+This method blocks, so it's recommended to call it from a coroutine:
 
 ```kotlin
 launch {
@@ -117,7 +117,7 @@ java -jar sampleapp/target/sampleapp-1.0-SNAPSHOT-jar-with-dependencies.jar
 
 ## Architecture
 
-JetIndexer uses an [inverted index](https://en.wikipedia.org/wiki/Inverted_index) to store a table mapping
+`JetIndexer` uses an [inverted index](https://en.wikipedia.org/wiki/Inverted_index) to store a table mapping
 tokens to **posting lists**. A posting list is a list of files and the corresponding integer positions where
 the token appears in that file. The inverted index starts as an in-memory `HashMap` and after reaching certain
 size it's written to disk in a shard. A shard then stores a map of token to offsets in the file where the posting 
@@ -144,11 +144,11 @@ looks like:
 
 The integers representing the document IDs, number of positions and positions are encoded
 in 
-[variable byte encoding (aka VarInt)](https://nlp.stanford.edu/IR-book/html/htmledition/variable-byte-codes-1.html) 
+[variable byte encoding](https://nlp.stanford.edu/IR-book/html/htmledition/variable-byte-codes-1.html) 
 to save space.
 
-To increase efficiency, the positions are stored as deltas. So for example of for a given 
-file the list of positions `[1, 7, 20]`. These are stored as `[1, 6, 14]`. Smaller integers allow 
+To increase efficiency, the positions are stored as deltas. So for example, for a given 
+file with the list of positions `[1, 7, 20]`, these are stored as `[1, 6, 14]`. Smaller integers allow 
 for better compression.
 
 ### Shards
@@ -166,6 +166,10 @@ search process. Then the files are added again, with a new document id in a new 
 This makes update operations very cheap, but it causes *garbage* to remain in the shards for some time.
 a compacting and re-indexing process could be implemented in the future.
 
+For now, the shards are loaded completely in memory. Which makes this library use a lot of memory for large
+indexes. However, it is not too hard to implement a more efficient strategy. For example, using memory-mapped
+files to read the shards without having to load them completely in memory.
+
 ### Concurrency
 
 Most of the actual data in the index is stored in immutable shards, which facilitates concurrent access.
@@ -175,11 +179,9 @@ safe the index uses a read-write lock to guard any modifications of these struct
 ### Trigrams
 
 The library is flexible enough to use any kind of tokenizer. There is a `Tokenizer` interface that can be
-used for such purpose. Besides the trivial `WhiteSpaceTokenizer` included, a trigram bazes tokenizer is included.
+used for such purpose. Besides the trivial `WhiteSpaceTokenizer`, a trigram based tokenizer is included.
 This allows to use the technique described here 
 [https://swtch.com/~rsc/regexp/regexp4.html](https://swtch.com/~rsc/regexp/regexp4.html):
-
-
 
 Using the corresponding `TrigramSubstringQueryResolver` it is possible to search for arbitrary substrings in the
 corpus of the index.

@@ -26,7 +26,7 @@ import kotlin.system.measureTimeMillis
 /**
  * JetIndexer is a text search engine library.
  *
- * JetIndexer takes a list of directories and it index text files contained in those
+ * JetIndexer takes a list of directories and it indexes text files contained in those
  * recursively. Additionally, it can watch those directories for changes and update
  * the index accordingly. Once the index is built it is possible to search text
  * in the indexed files in a fast way.
@@ -41,7 +41,7 @@ import kotlin.system.measureTimeMillis
  * val path = Paths.get("/path/to/files")
  * val indexer = JetIndexer(listOf(path))
  * indexer.index()
- * indexer.search("foo")
+ * indexer.query("foo")
  * ```
  *
  * @param paths A collection of [Path] objects containing the documents to index.
