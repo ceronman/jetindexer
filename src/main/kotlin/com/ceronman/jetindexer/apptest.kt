@@ -7,7 +7,8 @@ import kotlin.system.measureTimeMillis
 
 private val log = LoggerFactory.getLogger("app")
 
-fun main(args: Array<String>) = runBlocking {
+fun main() = runBlocking {
+    System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "DEBUG")
     val path = Paths.get("/Users/mceron/git_tree/github/intellij-community")
 //    val path = Paths.get("/home/ceronman/code/github/linux")
 //    val path = Paths.get("/home/ceronman/code/loxido")
@@ -18,10 +19,10 @@ fun main(args: Array<String>) = runBlocking {
     val paths = FileWalker().walk(listOf(path))
     log.info("Found {} files", paths.size)
 
-    val index = TokenIndex(WhiteSpaceTokenizer())
-//    val index = TokenIndex(WsTokenizer())
+//    val index = TokenIndex(WhiteSpaceTokenizer())
+    val index = TokenIndex(TrigramTokenizer())
 
-    var time = measureTimeMillis {
+    val time = measureTimeMillis {
         index.addBatch(paths)
     }
     log.info("Indexing took $time milliseconds (${time.toDouble() / 1000.0} seconds")
@@ -38,7 +39,8 @@ fun main(args: Array<String>) = runBlocking {
 //    }
 //    log.info("100 queries took $time milliseconds ( ${time / 100} per search )")
 
-    val queryResolver = StandardQueryResolver()
+//    val queryResolver = StandardQueryResolver()
+    val queryResolver = TrigramSubstringQueryResolver()
 
 //    for (i in 0 until 100) {
 //        launch(Dispatchers.Default) {
@@ -49,10 +51,10 @@ fun main(args: Array<String>) = runBlocking {
 //    val result = queryResolver.search("public")
     val result = queryResolver.search(index, "ParameterTableModelItemBase")
     val resultsByFile = result.groupBy { it.path }
-    for ((path, posting) in resultsByFile) {
-        println(path)
-        for (p in posting) {
-            println(p.position)
+    for ((p, posting) in resultsByFile) {
+        println(p)
+        for (r in posting) {
+            println(r.position)
         }
     }
 

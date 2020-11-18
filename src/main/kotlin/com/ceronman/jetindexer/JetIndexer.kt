@@ -3,15 +3,10 @@ package com.ceronman.jetindexer
 import io.methvin.watcher.DirectoryChangeEvent
 import io.methvin.watcher.DirectoryChangeListener
 import io.methvin.watcher.DirectoryWatcher
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import org.slf4j.LoggerFactory
-import java.nio.file.*
-import kotlin.collections.ArrayList
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.system.measureTimeMillis
-
 
 class JetIndexer(
         tokenizer: Tokenizer,
@@ -19,23 +14,29 @@ class JetIndexer(
         indexingFilter: IndexingFilter,
         private val paths: Collection<Path>
 ) {
-    val events: Flow<Event> get() = _events.asSharedFlow()
-    private val _events = MutableSharedFlow<Event>()
+    private lateinit var directoryPaths: List<Path>
     private val log = LoggerFactory.getLogger(this.javaClass)
     private val index = TokenIndex(tokenizer)
     private val fileWalker = FileWalker(indexingFilter)
-    @Volatile private var watcher: DirectoryWatcher? = null
+    private lateinit var watcher: DirectoryWatcher
 
-    suspend fun index() = withContext(Dispatchers.Default) {
-        val directoryPaths = filterPaths(paths)
-        val filePaths = fileWalker.walk(paths)
+    fun indexAndWatch(progressCallback: ProgressCallback, watchEventCallback: WatchEventCallback) {
+        index(progressCallback)
+        watch(watchEventCallback)
+    }
 
+    fun index(progressCallback: ProgressCallback = null) {
+        directoryPaths = filterPaths(paths)
+        val filePaths = fileWalker.walk(directoryPaths)
         val t = measureTimeMillis {
-            index.addBatch(filePaths)
+            index.addBatch(filePaths, progressCallback)
         }
-        log.info("Indexed ${filePaths.size} documents in ${t.toDouble() / 1000.0} seconds")
-        log.debug("Prepared to watch $directoryPaths")
+        log.debug("Indexing paths took ${t.toDouble() / 1000} seconds")
 
+        log.debug("FileWatcher is ready")
+    }
+
+    fun watch(eventCallback: WatchEventCallback) {
         watcher = DirectoryWatcher.builder()
             .paths(directoryPaths)
             .listener(object : DirectoryChangeListener {
@@ -48,46 +49,40 @@ class JetIndexer(
                             log.info("Watcher create event ${event.path()}")
                             if (Files.isRegularFile(event.path())) {
                                 index.add(event.path())
+                                eventCallback?.invoke(WatchEvent.INDEX_UPDATED)
                             }
                         }
                         DirectoryChangeEvent.EventType.DELETE -> {
                             log.info("Watcher delete event ${event.path()}")
                             index.delete(event.path())
+                            eventCallback?.invoke(WatchEvent.INDEX_UPDATED)
                         }
                         DirectoryChangeEvent.EventType.MODIFY -> {
                             log.info("Watcher modify event ${event.path()}")
                             if (Files.isRegularFile(event.path())) {
                                 index.update(event.path())
+                                eventCallback?.invoke(WatchEvent.INDEX_UPDATED)
                             }
                         }
                         DirectoryChangeEvent.EventType.OVERFLOW -> {
                             log.warn("File watcher overflowed!")
                         }
+                        else -> {
+                            log.error("An unknown error has been received from the file watcher")
+                        }
                     }
-
-                    // TODO: This doesn't seem right!
-                    runBlocking { _events.emit(IndexUpdateEvent()) }
                 }
             })
             .build()
-        log.debug("Watcher was built")
-
-        _events.emit(IndexingProgressEvent(100, true))
-
-        try {
-            watcher!!.watch()
-        } catch (e: ClosedWatchServiceException) {
-            log.warn("Closed service")
-        }
+        eventCallback?.invoke(WatchEvent.WATCHER_CREATED)
+        log.info("Starting file watcher")
+        watcher.watch()
         log.info("Terminating watch")
     }
 
     fun stop() {
         log.info("Stopping watch service")
-        if (watcher == null) {
-            log.error("Watcher is null!")
-        }
-        watcher?.close()
+        watcher.close()
     }
 
     fun query(term: String): List<QueryResult> {
@@ -111,6 +106,9 @@ class JetIndexer(
     }
 }
 
-sealed class Event
-class IndexUpdateEvent(): Event()
-data class IndexingProgressEvent(val progress: Int, val done: Boolean): Event()
+enum class WatchEvent {
+    WATCHER_CREATED,
+    INDEX_UPDATED
+}
+
+typealias WatchEventCallback = ((WatchEvent) -> Unit)?

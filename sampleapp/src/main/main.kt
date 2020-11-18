@@ -1,20 +1,22 @@
-import com.ceronman.jetindexer.*
+import com.ceronman.jetindexer.DefaultIndexingFilter
+import com.ceronman.jetindexer.JetIndexer
+import com.ceronman.jetindexer.TrigramSubstringQueryResolver
+import com.ceronman.jetindexer.TrigramTokenizer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.io.File
-import java.lang.StringBuilder
 import javax.swing.*
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
-fun main(args: Array<String>) {
+fun main() {
     System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "INFO")
     lateinit var indexer: JetIndexer
 
     val progressBar = JProgressBar()
+    progressBar.isVisible = false
 
     val logArea = JTextArea()
     logArea.text = "Please select a directory to watch"
@@ -25,30 +27,24 @@ fun main(args: Array<String>) {
     inputBox.isEnabled = false
 
     fun search() {
-        val term = inputBox.text
-        if (term.isEmpty()) {
-            return
+        GlobalScope.launch(Dispatchers.Default) {
+            val term = inputBox.text
+            if (term.isEmpty()) {
+                return@launch
+            }
+            val results = indexer.query(term)
+            val resultText = StringBuilder()
+            for (result in results) {
+                resultText.append("${result.path}:${result.position}\n")
+            }
+            logArea.text = resultText.toString()
         }
-        val results = indexer.query(term)
-        val resultText = StringBuilder()
-        for (result in results) {
-            resultText.append("${result.path}:${result.position}\n")
-        }
-        logArea.text = resultText.toString()
     }
 
-    inputBox.document.addDocumentListener(object: DocumentListener {
-        override fun insertUpdate(e: DocumentEvent?) {
-            search()
-        }
-
-        override fun removeUpdate(e: DocumentEvent?) {
-            search()
-        }
-
-        override fun changedUpdate(e: DocumentEvent?) {
-            search()
-        }
+    inputBox.document.addDocumentListener(object : DocumentListener {
+        override fun insertUpdate(e: DocumentEvent?) = search()
+        override fun removeUpdate(e: DocumentEvent?) = search()
+        override fun changedUpdate(e: DocumentEvent?) = search()
     })
 
 
@@ -56,24 +52,26 @@ fun main(args: Array<String>) {
     selectDirButton.addActionListener {
         val fileChooser = JFileChooser()
         fileChooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-        fileChooser.currentDirectory = File("/home/ceronman/code/github/intellij-community")
         if (fileChooser.showOpenDialog(selectDirButton) == JFileChooser.APPROVE_OPTION) {
-            println("Selected ${fileChooser.selectedFile}")
-            indexer = JetIndexer(WhiteSpaceTokenizer(), StandardQueryResolver(), DefaultIndexingFilter(), listOf(fileChooser.selectedFile.toPath()))
-            GlobalScope.launch { indexer.index() }
-            GlobalScope.launch {
-                indexer.events.collect { event ->
-                    if (event is IndexingProgressEvent) {
-                        progressBar.value = event.progress
-                        if (event.done) {
-                            inputBox.text = ""
-                            inputBox.isEnabled = true
-                            inputBox.isEditable = true
-                            logArea.text = "^ Type something in the box above!"
-                        }
-                    } else if (event is IndexUpdateEvent) {
-                        search()
-                    }
+            indexer = JetIndexer(
+                TrigramTokenizer(),
+                TrigramSubstringQueryResolver(),
+                DefaultIndexingFilter(),
+                listOf(fileChooser.selectedFile.toPath())
+            )
+            GlobalScope.launch(Dispatchers.Default) {
+                progressBar.string = "Indexing"
+                progressBar.value = 1
+                progressBar.isVisible = true
+                indexer.index { progress -> progressBar.value = progress }
+                progressBar.string = "Done"
+                progressBar.isVisible = false
+                inputBox.text = ""
+                inputBox.isEnabled = true
+                inputBox.isEditable = true
+                logArea.text = "^ Type something in the box above!"
+                indexer.watch {
+                    search()
                 }
             }
             selectDirButton.isEnabled = false

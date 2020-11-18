@@ -1,6 +1,8 @@
 package com.ceronman.jetindexer
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.withIndex
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -16,6 +18,8 @@ const val SHARD_SIZE_HINT = 50_000_000
 const val SHARD_INDEX_CAPACITY = 100_000
 const val MIN_CHUNK_SIZE = 1000
 private val MAX_WORKERS = Runtime.getRuntime().availableProcessors()
+
+typealias ProgressCallback = ((Int) -> Unit)?
 
 class TokenIndex(private val tokenizer: Tokenizer) {
     private val idGenerator = AtomicInteger(1)
@@ -33,7 +37,7 @@ class TokenIndex(private val tokenizer: Tokenizer) {
         return doc
     }
 
-    fun addBatch(paths: Collection<Path>) = runBlocking {
+    fun addBatch(paths: Collection<Path>, progressCallback: ProgressCallback = null) = runBlocking {
         val newDocuments = paths.map { createDocument(it) }
 
         val chunkSize = max(newDocuments.size / MAX_WORKERS, MIN_CHUNK_SIZE)
@@ -42,21 +46,25 @@ class TokenIndex(private val tokenizer: Tokenizer) {
         log.info("Indexing {} documents in ${chunks.size} chunks of {}", newDocuments.size, chunkSize)
 
         val jobs = ArrayList<Deferred<List<Shard>>>()
+        val progress = AtomicInteger()
         for (chunk in chunks) {
             val job = async(Dispatchers.Default) {
-                addBatchJob(chunk)
+                addBatchJob(chunk) {
+                    val p = ((progress.incrementAndGet().toDouble() / newDocuments.size.toDouble()) * 100).toInt()
+                    progressCallback?.invoke(p)
+                }
             }
             jobs.add(job)
         }
         val results = jobs.awaitAll().flatten()
         results.forEach { it.load() }
-
         rwLock.write {
             shards.addAll(results)
         }
+        progressCallback?.invoke(100)
     }
 
-    private fun addBatchJob(documents: Collection<Document>): List<Shard> {
+    private fun addBatchJob(documents: Collection<Document>, progressCallback: ProgressCallback): List<Shard> {
         val shards = ArrayList<Shard>()
         val index = ShardWriter(tokenizer)
         for (doc in documents) {
@@ -64,6 +72,7 @@ class TokenIndex(private val tokenizer: Tokenizer) {
             if (index.overCapacity()) {
                 shards.add(index.writeAndClear())
             }
+            progressCallback?.invoke(doc.id)
         }
         if (index.hasDocuments()) {
             shards.add(index.writeAndClear())

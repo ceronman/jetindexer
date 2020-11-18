@@ -1,9 +1,6 @@
 package com.ceronman.jetindexer
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.take
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -11,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.ThreadLocalRandom
 import kotlin.test.assertEquals
 
@@ -22,6 +20,7 @@ internal class JetIndexerTest {
 
     private lateinit var indexer: JetIndexer
     private lateinit var indexerJob: Job
+    private val eventQueue = LinkedBlockingDeque<WatchEvent>()
 
     @BeforeEach
     internal fun setUp() {
@@ -120,7 +119,7 @@ internal class JetIndexerTest {
 
         Files.delete(path2)
 
-        Thread.sleep(100) // TODO: Improve this by using an event channel
+        waitFor(WatchEvent.INDEX_UPDATED)
 
         assertQuery(
             listOf(
@@ -153,7 +152,7 @@ internal class JetIndexerTest {
 
         path2.toFile().writeText("xxx yyyy three")
 
-        Thread.sleep(100) // TODO: Improve this by using an event channel
+        waitFor(WatchEvent.INDEX_UPDATED)
 
         assertQuery(
             listOf(
@@ -171,7 +170,7 @@ internal class JetIndexerTest {
     }
 
     @Test
-    internal fun addedFile() = runBlocking {
+    internal fun addedFile() {
         val path1 = writeFile(tempDir, "one two three")
         val path2 = writeFile(tempDir, "three four five")
 
@@ -194,7 +193,7 @@ internal class JetIndexerTest {
 
         val path3 = writeFile(tempDir, "xxx yyy zzz three")
 
-        delay(100) // TODO: Improve this by using an event
+        waitFor(WatchEvent.INDEX_UPDATED)
 
         assertQuery(
             listOf(
@@ -333,19 +332,24 @@ internal class JetIndexerTest {
             DefaultIndexingFilter(),
             paths)
 
-        indexerJob = GlobalScope.launch {
-            indexer.index()
-        }
+        indexer.index()
 
-        runBlocking {
-            indexer.events.filter { it is IndexingProgressEvent && it.done }
-                .take(1)
-                .collect { }
+        indexerJob = GlobalScope.launch(Dispatchers.Default) {
+            indexer.watch {
+                eventQueue.offer(it)
+            }
+        }
+        waitFor(WatchEvent.WATCHER_CREATED)
+    }
+
+    private fun waitFor(e: WatchEvent) {
+        while (eventQueue.take() != e) {
+            Thread.sleep(10)
         }
     }
 
     private fun writeFile(dir: Path, contents: String): Path {
-        val path = Files.createTempFile(dir.toRealPath(), "test", "test")
+        val path = Files.createTempFile(dir.toRealPath(), "test", ".txt")
         path.toFile().writeText(contents)
         return path
     }

@@ -2,6 +2,7 @@ package com.ceronman.jetindexer
 
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.lang.IllegalStateException
 import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.*
@@ -9,7 +10,8 @@ import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
 interface IndexingFilter {
-    fun shouldIndex(path: Path): Boolean
+    fun shouldIndexFile(path: Path): Boolean
+    fun shouldIndexDir(path: Path): Boolean
 }
 
 class DefaultIndexingFilter: IndexingFilter {
@@ -24,32 +26,29 @@ class DefaultIndexingFilter: IndexingFilter {
         text | xml | json
     """.trimIndent(), RegexOption.COMMENTS)
 
-    private val badDirectoryRegex = Regex("""
-        ^( \.git | \.idea )$
-    """.trimIndent(), RegexOption.COMMENTS)
-
-    override fun shouldIndex(path: Path): Boolean {
-        if (Files.isDirectory(path)) {
-            if (badDirectoryRegex.find(path.toString()) != null) {
-                return false
-            }
-            return true
-        } else {
-            val contentType = Files.probeContentType(path)
-            if (contentType == null && goodExtensionsRegex.find(path.fileName.toString()) == null) {
-                return false
-            }
-
-            if (contentType != null && goodMimeTypes.find(contentType) == null) {
-                return false
-            }
-
-            if (Files.size(path) > 50_000_000) {
-                return false
-            }
-
-            return true
+    override fun shouldIndexFile(path: Path): Boolean {
+        val contentType = Files.probeContentType(path)
+        if (contentType == null && goodExtensionsRegex.find(path.fileName.toString()) == null) {
+            return false
         }
+
+        if (contentType != null && goodMimeTypes.find(contentType) == null) {
+            return false
+        }
+
+        if (Files.size(path) > 50_000_000) {
+            return false
+        }
+
+        return true
+    }
+
+    override fun shouldIndexDir(path: Path): Boolean {
+        val name = path.fileName.toString()
+        if (name.startsWith(".")) {
+            return false
+        }
+        return true
     }
 }
 
@@ -62,7 +61,7 @@ class FileWalker(private val filter: IndexingFilter = DefaultIndexingFilter()) {
             Files.walkFileTree(path, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
                     object : FileVisitor<Path> {
                         override fun preVisitDirectory(p: Path, attributes: BasicFileAttributes): FileVisitResult {
-                            if (filter.shouldIndex(p)) {
+                            if (filter.shouldIndexDir(p)) {
                                 log.debug("Scanning directory {}", p)
                                 return FileVisitResult.CONTINUE
                             } else {
@@ -72,7 +71,7 @@ class FileWalker(private val filter: IndexingFilter = DefaultIndexingFilter()) {
                         }
 
                         override fun visitFile(p: Path, attributes: BasicFileAttributes): FileVisitResult {
-                            if (filter.shouldIndex(p)) {
+                            if (filter.shouldIndexFile(p)) {
                                 log.debug("Found file {}", p)
                                 allPaths.add(p)
                             } else {
@@ -85,7 +84,7 @@ class FileWalker(private val filter: IndexingFilter = DefaultIndexingFilter()) {
                         override fun visitFileFailed(p: Path, e: IOException?): FileVisitResult {
                             log.warn("Unable to access file $p: $e")
                             log.debug("Exception raised", e)
-                            return FileVisitResult.CONTINUE;
+                            return FileVisitResult.CONTINUE
                         }
 
                         override fun postVisitDirectory(p: Path, e: IOException?): FileVisitResult {
