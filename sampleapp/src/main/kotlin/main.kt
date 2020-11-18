@@ -60,11 +60,8 @@ fun main() {
                 listOf(fileChooser.selectedFile.toPath())
             )
             GlobalScope.launch(Dispatchers.Default) {
-                progressBar.string = "Indexing"
-                progressBar.value = 1
                 progressBar.isVisible = true
                 indexer.index { progress -> progressBar.value = progress }
-                progressBar.string = "Done"
                 progressBar.isVisible = false
                 inputBox.text = ""
                 inputBox.isEnabled = true

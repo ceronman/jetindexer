@@ -27,7 +27,9 @@ class JetIndexer(
     }
 
     fun index(progressCallback: ProgressCallback = null) {
+        progressCallback?.invoke(1)
         directoryPaths = filterPaths(paths)
+        progressCallback?.invoke(2)
         val filePaths = fileWalker.walk(directoryPaths)
         val t = measureTimeMillis {
             index.addBatch(filePaths, progressCallback)
