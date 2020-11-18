@@ -1,3 +1,17 @@
+// Copyright Manuel Cerón. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package com.ceronman.jetindexer
 
 import org.slf4j.LoggerFactory
@@ -7,11 +21,21 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.util.*
 import kotlin.collections.ArrayList
 
+/**
+ * Allows to filter which files should be indexed in a directory
+ * when recursively walking it.
+ */
 interface IndexingFilter {
     fun shouldIndexFile(path: Path): Boolean
     fun shouldIndexDir(path: Path): Boolean
 }
 
+/**
+ * A default implementation of [IndexingFilter] that just looks for extensions
+ * an mime types that look like text files.
+ *
+ * This implementation could be improved considerably :(
+ */
 class DefaultIndexingFilter : IndexingFilter {
     private val goodExtensionsRegex = Regex(
         """
@@ -55,7 +79,10 @@ class DefaultIndexingFilter : IndexingFilter {
     }
 }
 
-class FileWalker(private val filter: IndexingFilter = DefaultIndexingFilter()) {
+/**
+ * Recursively walks a list of directories, filtering them by the provided [IndexingFilter]
+ */
+internal class FileWalker(private val filter: IndexingFilter = DefaultIndexingFilter()) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun walk(paths: Collection<Path>): List<Path> {
