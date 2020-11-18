@@ -8,15 +8,6 @@ internal class PostingList {
     private var buffer = ByteBuffer.allocate(1024)
     private val growthFactor = 1.5
 
-    fun position(): Int {
-        return buffer.position()
-    }
-
-    fun close(): ByteBuffer {
-        buffer.flip()
-        return buffer.asReadOnlyBuffer()
-    }
-
     fun asReadOnly(): ByteBuffer {
         val buf = buffer.duplicate()
         buf.flip()

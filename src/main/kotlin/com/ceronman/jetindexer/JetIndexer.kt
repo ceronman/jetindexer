@@ -4,15 +4,16 @@ import io.methvin.watcher.DirectoryChangeEvent
 import io.methvin.watcher.DirectoryChangeListener
 import io.methvin.watcher.DirectoryWatcher
 import org.slf4j.LoggerFactory
+import java.nio.file.ClosedWatchServiceException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.system.measureTimeMillis
 
 class JetIndexer(
-        tokenizer: Tokenizer,
-        private val queryResolver: QueryResolver,
-        indexingFilter: IndexingFilter,
-        private val paths: Collection<Path>
+    tokenizer: Tokenizer,
+    private val queryResolver: QueryResolver,
+    indexingFilter: IndexingFilter,
+    private val paths: Collection<Path>
 ) {
     private lateinit var directoryPaths: List<Path>
     private val log = LoggerFactory.getLogger(this.javaClass)
@@ -76,7 +77,12 @@ class JetIndexer(
             .build()
         eventCallback?.invoke(WatchEvent.WATCHER_CREATED)
         log.info("Starting file watcher")
-        watcher.watch()
+        try {
+            watcher.watch()
+        } catch (e: ClosedWatchServiceException) {
+            log.info("File watcher was closed before starting to watch")
+        }
+
         log.info("Terminating watch")
     }
 

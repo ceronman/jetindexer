@@ -3,26 +3,26 @@ package com.ceronman.jetindexer
 import java.nio.file.Path
 
 data class QueryResult(
-        val term: String,
-        val path: Path,
-        val position: Int
+    val term: String,
+    val path: Path,
+    val position: Int
 )
 
 interface QueryResolver {
     fun search(index: TokenIndex, term: String): List<QueryResult>
 }
 
-class StandardQueryResolver(): QueryResolver {
+class StandardQueryResolver() : QueryResolver {
     override fun search(index: TokenIndex, term: String): List<QueryResult> {
         val view = index.rawQuery(term)
         return view.readPostings()
-                .filter { index.documentPath(it.docId) != null }
-                .map { QueryResult(term, index.documentPath(it.docId)!!, it.position) }
-                .toList()
+            .filter { index.documentPath(it.docId) != null }
+            .map { QueryResult(term, index.documentPath(it.docId)!!, it.position) }
+            .toList()
     }
 }
 
-class TrigramSubstringQueryResolver(): QueryResolver {
+class TrigramSubstringQueryResolver() : QueryResolver {
     private val tokenizer = TrigramTokenizer()
 
     override fun search(index: TokenIndex, term: String): List<QueryResult> {
@@ -33,8 +33,8 @@ class TrigramSubstringQueryResolver(): QueryResolver {
         }
 
         return mergePostings(postings)
-                .filter { posting -> index.documentPath(posting.docId) != null }
-                .map { posting -> QueryResult(term, index.documentPath(posting.docId)!!, posting.position) }
+            .filter { posting -> index.documentPath(posting.docId) != null }
+            .map { posting -> QueryResult(term, index.documentPath(posting.docId)!!, posting.position) }
     }
 
     private fun mergePostings(postings: List<PostingListView>): List<Posting> {

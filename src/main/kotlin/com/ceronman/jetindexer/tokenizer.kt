@@ -6,8 +6,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 data class Token(
-        val lexeme: String,
-        val position: Int
+    val lexeme: String,
+    val position: Int
 )
 
 // TODO: Handle tokenization errors
@@ -15,7 +15,7 @@ interface Tokenizer {
     fun tokenize(path: Path): Sequence<Token>
 }
 
-class TrigramTokenizer: Tokenizer {
+class TrigramTokenizer : Tokenizer {
     private val log = LoggerFactory.getLogger(javaClass)
 
     override fun tokenize(path: Path): Sequence<Token> {
@@ -46,7 +46,7 @@ class TrigramTokenizer: Tokenizer {
     }
 }
 
-class WhiteSpaceTokenizer: Tokenizer {
+class WhiteSpaceTokenizer : Tokenizer {
     override fun tokenize(path: Path): Sequence<Token> = sequence {
         val bytes = Files.readAllBytes(path)
         val string = String(bytes, Charsets.UTF_8)

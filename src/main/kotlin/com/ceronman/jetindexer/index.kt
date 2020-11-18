@@ -1,8 +1,6 @@
 package com.ceronman.jetindexer
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.withIndex
 import org.slf4j.LoggerFactory
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -166,7 +164,7 @@ internal class ShardWriter(private val tokenizer: Tokenizer) {
         val tokenOffsets = HashMap<String, IntArray>(postings.size)
         Files.newByteChannel(shardPath, StandardOpenOption.WRITE).use { channel ->
             for ((token, postingList) in postings) {
-                val postingListBuffer = postingList.close()
+                val postingListBuffer = postingList.asReadOnly()
                 val offset = IntArray(2)
                 offset[0] = channel.position().toInt()
                 offset[1] = postingListBuffer.remaining()
@@ -181,8 +179,9 @@ internal class ShardWriter(private val tokenizer: Tokenizer) {
 }
 
 internal class Shard(
-        private val path: Path,
-        private val tokenOffsets: Map<String, IntArray>) {
+    private val path: Path,
+    private val tokenOffsets: Map<String, IntArray>
+) {
 
     private lateinit var buffer: ByteBuffer
 

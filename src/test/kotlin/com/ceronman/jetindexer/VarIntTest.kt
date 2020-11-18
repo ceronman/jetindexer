@@ -1,8 +1,7 @@
 package com.ceronman.jetindexer
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-
-import org.junit.jupiter.api.Assertions.*
 import java.nio.ByteBuffer
 
 internal class VarIntTest {
@@ -10,7 +9,7 @@ internal class VarIntTest {
     private val buffer: ByteBuffer = ByteBuffer.allocate(1024)
 
     @Test
-    fun putSmallVarInt() {
+    internal fun putSmallVarInt() {
         buffer.putVarInt(1)
         assertEquals(1, buffer.position())
         buffer.flip()
@@ -24,7 +23,7 @@ internal class VarIntTest {
     }
 
     @Test
-    fun putBigVarInt() {
+    internal fun putBigVarInt() {
         buffer.putVarInt(1024)
         assertEquals(2, buffer.position())
         buffer.flip()
@@ -38,7 +37,7 @@ internal class VarIntTest {
     }
 
     @Test
-    fun putHugeVarInt() {
+    internal fun putHugeVarInt() {
         buffer.putVarInt(Int.MAX_VALUE)
         assertEquals(5, buffer.position())
         buffer.flip()
@@ -46,7 +45,7 @@ internal class VarIntTest {
     }
 
     @Test
-    fun putNegativeVarInt() {
+    internal fun putNegativeVarInt() {
         buffer.putVarInt(-1)
         assertEquals(5, buffer.position())
         buffer.flip()

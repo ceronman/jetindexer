@@ -1,6 +1,6 @@
 package com.ceronman.jetindexer
 
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -33,20 +33,30 @@ internal class TrigramTokenizerTest {
         val tokenizer = TrigramTokenizer()
         val path = writeFile(tempDir, "one two three")
         assertEquals(
-                listOf(
-                        Token("one", 0),
-                        Token("ne ", 1),
-                        Token("e t", 2),
-                        Token(" tw", 3),
-                        Token("two", 4),
-                        Token("wo ", 5),
-                        Token("o t", 6),
-                        Token(" th", 7),
-                        Token("thr", 8),
-                        Token("hre", 9),
-                        Token("ree", 10),
-                ),
-                tokenizer.tokenize(path).toList()
+            listOf(
+                Token("one", 0),
+                Token("ne ", 1),
+                Token("e t", 2),
+                Token(" tw", 3),
+                Token("two", 4),
+                Token("wo ", 5),
+                Token("o t", 6),
+                Token(" th", 7),
+                Token("thr", 8),
+                Token("hre", 9),
+                Token("ree", 10),
+            ),
+            tokenizer.tokenize(path).toList()
+        )
+    }
+
+    @Test
+    internal fun smallWord(@TempDir tempDir: Path) {
+        val tokenizer = TrigramTokenizer()
+        val path = writeFile(tempDir, "on")
+        assertEquals(
+            emptyList<Token>(),
+            tokenizer.tokenize(path).toList()
         )
     }
 

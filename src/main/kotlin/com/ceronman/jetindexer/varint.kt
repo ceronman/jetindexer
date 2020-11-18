@@ -19,7 +19,7 @@ fun ByteBuffer.putVarInt(value: Int): ByteBuffer {
 
 fun ByteBuffer.getVarInt(): Int {
     var tmp = this.get().toInt()
-    if (tmp  >= 0) {
+    if (tmp >= 0) {
         return tmp
     }
     var result = tmp and 0x7f
