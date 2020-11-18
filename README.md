@@ -189,3 +189,8 @@ corpus of the index.
 It is also possible to implement a `QueryResolver` that searches the corups using regex, following the same 
 principles explained in the article linked above. But unfortunatelly, this is not implemented yet.
 
+## Known issues
+
+- Only UTF-8 file encoding is handled at the moment. Files in different encodings will cause warnings/error
+  and will be ignored.
+- The Trigram based tokenizer/query handler can't search terms of less than three characters.
