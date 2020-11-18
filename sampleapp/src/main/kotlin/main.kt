@@ -38,11 +38,17 @@ fun main() {
 
     val inputBox = JTextField()
     inputBox.text = "input query"
+    inputBox.isEditable = false
 
     fun search() {
         GlobalScope.launch(Dispatchers.Default) {
             val term = inputBox.text
             if (term.isEmpty()) {
+                logArea.text = "\uD83E\uDC51 Type something in the box above!"
+                return@launch
+            }
+            if (term.length < 3) {
+                logArea.text = "\uD83E\uDC53 Queries smaller than 3 characters are not indexed. Run a full scan"
                 return@launch
             }
             val results = indexer.query(term)
@@ -72,6 +78,7 @@ fun main() {
                 TrigramSubstringQueryResolver(),
                 DefaultIndexingFilter(),
             )
+            inputBox.isEditable = true
             GlobalScope.launch(Dispatchers.Default) {
                 progressBar.isVisible = true
                 inputBox.text = ""
