@@ -25,7 +25,7 @@ private val log = LoggerFactory.getLogger("app")
 
 fun main() = runBlocking {
     System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "DEBUG")
-    val path = Paths.get("/Users/mceron/git_tree/github/intellij-community")
+    val path = Paths.get("/home/ceronman/code/github/intellij-community")
 //    val path = Paths.get("/home/ceronman/code/github/linux")
 //    val path = Paths.get("/home/ceronman/code/loxido")
 //    val path = Paths.get("/home/ceronman/problems")

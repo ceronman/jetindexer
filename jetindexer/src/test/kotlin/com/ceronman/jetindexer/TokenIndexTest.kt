@@ -134,7 +134,7 @@ internal class TokenIndexTest {
             results1
         )
 
-        Files.writeString(path3, "one two")
+        path3.toFile().writeText( "one two")
         index.update(path3)
 
         val results2 = StandardQueryResolver().search(index, "two")

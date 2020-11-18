@@ -100,7 +100,7 @@ fun main() {
     panel.add(progressBar, BorderLayout.AFTER_LAST_LINE)
     panel.add(JScrollPane(logArea), BorderLayout.CENTER)
 
-    val frame = JFrame("JetIndexer sample applicatoin")
+    val frame = JFrame("JetIndexer sample application")
     frame.contentPane.add(panel, BorderLayout.CENTER)
     frame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
     frame.size = Dimension(1000, 1000)

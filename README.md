@@ -103,12 +103,14 @@ mvn test
 
 ## Sample program
 
+![sample app screenshot](sampleapp.png)
+
 There is a simple example program using Java Swing that demostrate how the library is used.
 
 To run it just run:
 
 ```
-mvn test
+mvn clean package
 java -jar sampleapp/target/sampleapp-1.0-SNAPSHOT-jar-with-dependencies.jar
 ```
 
