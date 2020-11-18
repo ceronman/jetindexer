@@ -38,7 +38,7 @@ data class Posting(val docId: Int, val position: Int)
  * in a variable byte encoding (aka VarInt) (@see [ByteBuffer.putVarInt]) to save space.
  *
  * To increase efficiency, the positions are stored as deltas. So for example of for a given
- * file the list of positions [1 7 20]. These are stored as [1, 6, 14]. Smaller integers allow
+ * file the list of positions [1, 7, 20]. These are stored as [1, 6, 14]. Smaller integers allow
  * for better compression.
  *
  * The order of the posting list is very important. File IDs should be stored in a monotonically

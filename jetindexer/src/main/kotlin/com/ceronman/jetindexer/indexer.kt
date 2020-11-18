@@ -31,7 +31,7 @@ import kotlin.system.measureTimeMillis
  * the index accordingly. Once the index is built it is possible to search text
  * in the indexed files in a fast way.
  *
- * The indexation process can be customized by provider a custom [Tokenizer] and or
+ * The indexation process can be customized by providing a custom [Tokenizer] and or
  * [QueryResolver]. Filtering which files should be indexed can be configured by
  * providing a [IndexingFilter] object.
  *
