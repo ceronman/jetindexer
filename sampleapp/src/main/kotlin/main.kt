@@ -38,7 +38,6 @@ fun main() {
 
     val inputBox = JTextField()
     inputBox.text = "input query"
-    inputBox.isEnabled = false
 
     fun search() {
         GlobalScope.launch(Dispatchers.Default) {
@@ -75,11 +74,9 @@ fun main() {
             )
             GlobalScope.launch(Dispatchers.Default) {
                 progressBar.isVisible = true
+                inputBox.text = ""
                 indexer.index { progress -> progressBar.value = progress }
                 progressBar.isVisible = false
-                inputBox.text = ""
-                inputBox.isEnabled = true
-                inputBox.isEditable = true
                 logArea.text = "^ Type something in the box above!"
                 indexer.watch {
                     search()

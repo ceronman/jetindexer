@@ -95,7 +95,7 @@ class InvertedIndex(private val tokenizer: Tokenizer) {
 
         log.info("Adding {} documents in {} chunks of {}", newDocuments.size, chunks.size, chunkSize)
 
-        val jobs = ArrayList<Deferred<List<Shard>>>()
+        val jobs = ArrayList<Job>()
         val progress = AtomicInteger()
         for (chunk in chunks) {
             val job = async(Dispatchers.Default) {
@@ -106,11 +106,7 @@ class InvertedIndex(private val tokenizer: Tokenizer) {
             }
             jobs.add(job)
         }
-        val results = jobs.awaitAll().flatten()
-        results.forEach(Shard::load)
-        rwLock.write {
-            shards.addAll(results)
-        }
+        jobs.joinAll()
         progressCallback?.invoke(100)
     }
 
@@ -214,20 +210,23 @@ class InvertedIndex(private val tokenizer: Tokenizer) {
      * A job that will index a batch of documents. Likely going to be called from multiple coroutines or threads
      * running in parallel.
      */
-    private fun addBatchJob(documents: Collection<Document>, progressCallback: ProgressCallback): List<Shard> {
-        val shards = ArrayList<Shard>()
+    private fun addBatchJob(documents: Collection<Document>, progressCallback: ProgressCallback) {
         val index = ShardWriter(tokenizer)
         for (doc in documents) {
             index.add(doc)
             if (index.overCapacity()) {
-                shards.add(index.writeAndClear())
+                addShard(index.writeAndClear())
             }
             progressCallback?.invoke(doc.id)
         }
         if (index.hasDocuments()) {
-            shards.add(index.writeAndClear())
+            addShard(index.writeAndClear())
         }
-        return shards
+    }
+
+    private fun addShard(shard: Shard) = rwLock.write {
+        shard.load()
+        shards.add(shard)
     }
 }
 
