@@ -114,3 +114,19 @@ class TrigramTokenizer : Tokenizer {
         yield(Token(str.substring(start, end), start))
     }
 }
+
+/**
+ * An implementation of [Tokenizer] that looks for patterns in a file
+ * matching a regular expression and produces tokens that match that regex.
+ *
+ * For example, to tokenize by identifier of the Java programming language
+ * it's possible to use the [a-zA-Z_$][a-zA-Z\\d_$]* pattern
+ */
+class RegexTokenizer(private val tokenPattern: Regex): Tokenizer {
+    override fun tokenize(path: Path): Sequence<Token> {
+        val bytes = Files.readAllBytes(path)
+        val string = String(bytes, Charsets.UTF_8)
+        val results = tokenPattern.findAll(string)
+        return results.map { Token(string.substring(it.range), it.range.first) }
+    }
+}

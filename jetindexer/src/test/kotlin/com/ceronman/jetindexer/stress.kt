@@ -36,7 +36,8 @@ fun main() = runBlocking {
     log.info("Found {} files", paths.size)
 
 //    val index = TokenIndex(WhiteSpaceTokenizer())
-    val index = InvertedIndex(TrigramTokenizer())
+//    val index = InvertedIndex(TrigramTokenizer())
+    val index = InvertedIndex(RegexTokenizer("[_0-9a-zA-Z]+".toRegex()))
 
     var time = measureTimeMillis {
         index.addBatch(paths)
@@ -51,8 +52,8 @@ fun main() = runBlocking {
     }
     log.info("Updating 10,000 documents took ${time / 1000} seconds")
 
-    val queryResolver = TrigramSubstringQueryResolver()
-//    val queryResolver = StandardQueryResolver()
+//    val queryResolver = TrigramSubstringQueryResolver()
+    val queryResolver = StandardQueryResolver()
 
     time = measureTimeMillis {
         for (i in 1..100) {
@@ -72,9 +73,9 @@ fun main() = runBlocking {
         }
     }
 
-    val result = queryResolver.search(index, "ParameterTableModelItemBase")
+    val result = queryResolver.search(index, "computeIfAbsent")
     val resultsByFile = result.groupBy { it.path }
-    log.info("Results of searching for 'ParameterTableModelItemBase'")
+    log.info("Results of searching for 'computeIfAbsent'")
     for ((p, posting) in resultsByFile) {
         log.info("Found path: $p with positions:")
         for (r in posting) {
