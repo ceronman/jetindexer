@@ -16,9 +16,9 @@ class DefaultIndexingFilter : IndexingFilter {
     private val goodExtensionsRegex = Regex(
         """
         \.(
-            ant | bat | c | cgi | coffee | cpp | cs | d | fish | flake8 | flex | gradle | graphql | groovy | 
-            h | hpp | java | jql | js | json | jsp | jsx | kt | log | php | py | sh | swift | tcl | txt | vb | 
-            yml
+            ant | bat | c | cgi | coffee | cpp | cs | d | fish | flake8 | flex | gradle |
+            graphql | groovy | h | hpp | java | jql | js | json | jsp | jsx | kt | log | 
+            php | py | sh | swift | tcl | txt | vb | xml | yaml | yml
         )$
     """.trimIndent(), RegexOption.COMMENTS
     )

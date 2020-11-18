@@ -26,7 +26,7 @@ class TrigramSubstringQueryResolver() : QueryResolver {
     private val tokenizer = TrigramTokenizer()
 
     override fun search(index: TokenIndex, term: String): List<QueryResult> {
-        val postings = tokenizer.tokenize(term).map { index.rawQuery(it.lexeme) }.toList()
+        val postings = tokenizer.tokenize(term).map { index.rawQuery(it.text) }.toList()
 
         if (postings.isEmpty()) {
             return emptyList()

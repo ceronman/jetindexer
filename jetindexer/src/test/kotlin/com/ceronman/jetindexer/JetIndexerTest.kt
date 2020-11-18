@@ -24,7 +24,7 @@ internal class JetIndexerTest {
 
     @AfterEach
     internal fun tearDown() {
-        indexer.stop()
+        indexer.stopWatching()
         runBlocking { indexerJob.join() }
     }
 
@@ -48,7 +48,7 @@ internal class JetIndexerTest {
             indexer.query("six")
         )
 
-        indexer.stop()
+        indexer.stopWatching()
     }
 
     @Test
@@ -72,7 +72,7 @@ internal class JetIndexerTest {
             indexer.query("foo")
         )
 
-        indexer.stop()
+        indexer.stopWatching()
     }
 
     @Test
@@ -83,7 +83,7 @@ internal class JetIndexerTest {
             emptyList(),
             indexer.query("test")
         )
-        indexer.stop()
+        indexer.stopWatching()
     }
 
     @Test
@@ -97,7 +97,7 @@ internal class JetIndexerTest {
             listOf(QueryResult("one", path1, 0)),
             indexer.query("one")
         )
-        indexer.stop()
+        indexer.stopWatching()
     }
 
     @Test
@@ -126,7 +126,7 @@ internal class JetIndexerTest {
             indexer.query("three")
         )
 
-        indexer.stop()
+        indexer.stopWatching()
     }
 
     @Test
@@ -168,7 +168,7 @@ internal class JetIndexerTest {
             indexer.query("five")
         )
 
-        indexer.stop()
+        indexer.stopWatching()
     }
 
     @Test
@@ -238,7 +238,7 @@ internal class JetIndexerTest {
             indexer.query("foo")
         )
 
-        indexer.stop()
+        indexer.stopWatching()
     }
 
     @Test
@@ -269,7 +269,7 @@ internal class JetIndexerTest {
             indexer.query("foo")
         )
 
-        indexer.stop()
+        indexer.stopWatching()
     }
 
     @Test
@@ -330,13 +330,7 @@ internal class JetIndexerTest {
     }
 
     private fun initIndexer(paths: List<Path>) {
-        indexer = JetIndexer(
-            WhiteSpaceTokenizer(),
-            StandardQueryResolver(),
-            DefaultIndexingFilter(),
-            paths
-        )
-
+        indexer = JetIndexer(paths)
         indexer.index()
 
         indexerJob = GlobalScope.launch(Dispatchers.Default) {

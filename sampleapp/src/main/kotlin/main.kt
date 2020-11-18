@@ -54,10 +54,10 @@ fun main() {
         fileChooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
         if (fileChooser.showOpenDialog(selectDirButton) == JFileChooser.APPROVE_OPTION) {
             indexer = JetIndexer(
+                listOf(fileChooser.selectedFile.toPath()),
                 TrigramTokenizer(),
                 TrigramSubstringQueryResolver(),
                 DefaultIndexingFilter(),
-                listOf(fileChooser.selectedFile.toPath())
             )
             GlobalScope.launch(Dispatchers.Default) {
                 progressBar.isVisible = true

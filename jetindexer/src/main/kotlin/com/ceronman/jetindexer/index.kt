@@ -12,9 +12,9 @@ import kotlin.concurrent.read
 import kotlin.concurrent.write
 import kotlin.math.max
 
-const val SHARD_SIZE_HINT = 50_000_000
-const val SHARD_INDEX_CAPACITY = 100_000
-const val MIN_CHUNK_SIZE = 1000
+private const val SHARD_SIZE_HINT = 50_000_000
+private const val SHARD_INDEX_CAPACITY = 100_000
+private const val MIN_CHUNK_SIZE = 1000
 private val MAX_WORKERS = Runtime.getRuntime().availableProcessors()
 
 typealias ProgressCallback = ((Int) -> Unit)?
@@ -36,26 +36,26 @@ class TokenIndex(private val tokenizer: Tokenizer) {
     }
 
     fun addBatch(paths: Collection<Path>, progressCallback: ProgressCallback = null) = runBlocking {
-        val newDocuments = paths.map { createDocument(it) }
+        val newDocuments = paths.map(::createDocument)
 
         val chunkSize = max(newDocuments.size / MAX_WORKERS, MIN_CHUNK_SIZE)
         val chunks = newDocuments.chunked(chunkSize)
 
-        log.info("Indexing {} documents in ${chunks.size} chunks of {}", newDocuments.size, chunkSize)
+        log.info("Adding {} documents in {} chunks of {}", newDocuments.size, chunks.size, chunkSize)
 
         val jobs = ArrayList<Deferred<List<Shard>>>()
         val progress = AtomicInteger()
         for (chunk in chunks) {
             val job = async(Dispatchers.Default) {
                 addBatchJob(chunk) {
-                    val p = ((progress.incrementAndGet().toDouble() / newDocuments.size.toDouble()) * 100).toInt()
-                    progressCallback?.invoke(p)
+                    val p = (progress.incrementAndGet().toDouble() / newDocuments.size.toDouble()) * 100.0
+                    progressCallback?.invoke(p.toInt())
                 }
             }
             jobs.add(job)
         }
         val results = jobs.awaitAll().flatten()
-        results.forEach { it.load() }
+        results.forEach(Shard::load)
         rwLock.write {
             shards.addAll(results)
         }
@@ -79,7 +79,7 @@ class TokenIndex(private val tokenizer: Tokenizer) {
     }
 
     fun add(path: Path) = rwLock.write {
-        log.info("Added {} to the index", path)
+        log.info("Adding {} to the index", path)
 
         val document = createDocument(path)
         shardWriter.add(document)
@@ -109,7 +109,7 @@ class TokenIndex(private val tokenizer: Tokenizer) {
             delete(path)
             add(path)
         } else {
-            log.warn("Attempting to update document {} that is not in the index", 0)
+            log.warn("Attempting to update document {} that is not in the index", path)
         }
     }
 
@@ -130,14 +130,22 @@ class TokenIndex(private val tokenizer: Tokenizer) {
 data class Document(val id: Int, val path: Path)
 
 internal class ShardWriter(private val tokenizer: Tokenizer) {
+    private val log = LoggerFactory.getLogger(javaClass)
     private val postings = HashMap<String, PostingList>(SHARD_INDEX_CAPACITY)
     private val tokenPositions = HashMap<String, MutableList<Int>>(2048)
     private var size = 0
 
     fun add(document: Document) {
         tokenPositions.clear()
-        for (token in tokenizer.tokenize(document.path)) {
-            tokenPositions.computeIfAbsent(token.lexeme) { ArrayList() }.add(token.position)
+        val tokens = try {
+            tokenizer.tokenize(document.path)
+        } catch (e: Exception) {
+            log.warn("Tokenizer failed for ${document.path}", e)
+            log.debug("Exception raised", e)
+            return
+        }
+        for (token in tokens) {
+            tokenPositions.computeIfAbsent(token.text) { ArrayList() }.add(token.position)
         }
         for ((token, positions) in tokenPositions) {
             val posting = postings.computeIfAbsent(token) { PostingList() }

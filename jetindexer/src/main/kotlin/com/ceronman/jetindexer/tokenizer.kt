@@ -6,11 +6,10 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 data class Token(
-    val lexeme: String,
+    val text: String,
     val position: Int
 )
 
-// TODO: Handle tokenization errors
 interface Tokenizer {
     fun tokenize(path: Path): Sequence<Token>
 }
