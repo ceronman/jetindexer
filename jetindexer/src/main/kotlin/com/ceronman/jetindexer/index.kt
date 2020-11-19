@@ -184,22 +184,60 @@ class InvertedIndex(private val tokenizer: Tokenizer) {
     }
 
     /**
-     * Returns the document ID for a given path in the index. Or null if the document is not indexed.
+     * Performs a full scan query for a given token.
      *
-     * This is used by the [QueryResolver] to filter out deleted files.
+     * This doesn't use the index, but instead does a full scan over the real files looking
+     * for those having the specified substring. This methods should be used only for last resource.
+     * For example when the tokenzier/query resolver can't find certain types of strings in the index.
      *
-     * @param docId an document ID.
-     * @return a [Path] object for the given file id.
+     * @param term A String with the term or token to find directly in the files.
+     * @return A [Sequence] of [Posting] indicating the files and the locations of the term.
      */
-    fun documentPath(docId: Int): Path? = rwLock.read {
-        return documentsById[docId]?.path
+    fun fullScanQuery(term: String): Sequence<Posting> {
+        log.info("Running a full scan query for {}", term)
+
+        val documents = rwLock.read {
+            HashMap(documentsById)
+        }
+        val matcher = Regex(Regex.escape(term))
+        return sequence {
+            for (docId in documentsById.keys.sorted()) {
+                val path = documents[docId]!!.path
+                val content = try {
+                    String(Files.readAllBytes(path), Charsets.UTF_8)
+                } catch (e: Exception) {
+                    log.warn("Error reading document {}: {}", path, e)
+                    log.debug("Exception raised:", e)
+                    continue
+                }
+                for (match in matcher.findAll(content)) {
+                    yield(Posting(docId, match.range.first))
+                }
+            }
+        }
+    }
+
+    /**
+     * Creates a sequence of [QueryResult] using from a sequence of [Posting] objects
+     *
+     * This takes care of filtering out files that might remain in the shards, but have been removed
+     * from the list of documents.
+     */
+    fun createQueryResults(term: String, postings: Sequence<Posting>): Sequence<QueryResult> = sequence {
+        for (posting in postings) {
+            val doc = rwLock.read {
+                documentsById[posting.docId]
+            }
+            if (doc != null) {
+                yield(QueryResult(term, doc.path, posting.position))
+            }
+        }
     }
 
     /**
      * Convenience method to create a new document.
-     * Thread safety warning: Synchronization is required before calling this private method.
      */
-    private fun createDocument(path: Path): Document {
+    private fun createDocument(path: Path): Document = rwLock.write {
         val doc = Document(idGenerator.getAndIncrement(), path)
         documentsById[doc.id] = doc
         documentsByPath[path] = doc

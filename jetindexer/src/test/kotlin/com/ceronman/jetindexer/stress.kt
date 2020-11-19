@@ -25,7 +25,7 @@ private val log = LoggerFactory.getLogger("app")
 
 fun main() = runBlocking {
     System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "DEBUG")
-    val path = Paths.get("/home/ceronman/code/github/intellij-community")
+    val path = Paths.get("/Users/mceron/git_tree/github/intellij-community")
 //    val path = Paths.get("/home/ceronman/code/github/linux")
 //    val path = Paths.get("/home/ceronman/code/loxido")
 //    val path = Paths.get("/home/ceronman/problems")
@@ -63,10 +63,10 @@ fun main() = runBlocking {
     log.info("100 queries took $time milliseconds ( ${time / 100} per search )")
 
     log.info("Running queries in parallel")
-    val expected = queryResolver.search(index, "ParameterTableModelItemBase")
+    val expected = queryResolver.search(index, "ParameterTableModelItemBase").toList()
     for (i in 0 until 100) {
         launch(Dispatchers.Default) {
-            val r = queryResolver.search(index, "ParameterTableModelItemBase")
+            val r = queryResolver.search(index, "ParameterTableModelItemBase").toList()
             if (r != expected) {
                 throw Exception("Parallel search failed")
             }

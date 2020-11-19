@@ -43,9 +43,18 @@ interface QueryResolver {
 class StandardQueryResolver() : QueryResolver {
     override fun search(index: InvertedIndex, query: String): Sequence<QueryResult> {
         val view = index.rawQuery(query)
-        return view.readPostings()
-            .filter { index.documentPath(it.docId) != null }
-            .map { QueryResult(query, index.documentPath(it.docId)!!, it.position) }
+        return index.createQueryResults(query, view.readPostings())
+    }
+}
+
+/**
+ * An implementation of [QueryResolver] that just skips the index completely and
+ * performs a full scan over the indexed files directly.
+ */
+class FullScanQueryResolver() : QueryResolver {
+    override fun search(index: InvertedIndex, query: String): Sequence<QueryResult> {
+        val postings = index.fullScanQuery(query)
+        return index.createQueryResults(query, postings)
     }
 }
 
@@ -73,15 +82,18 @@ class TrigramSubstringQueryResolver() : QueryResolver {
     private val tokenizer = TrigramTokenizer()
 
     override fun search(index: InvertedIndex, query: String): Sequence<QueryResult> {
-        val postings = tokenizer.tokenize(query).map { index.rawQuery(it.text) }.toList()
+        if (query.length < 3) {
+            val postings = index.fullScanQuery(query)
+            return index.createQueryResults(query, postings)
+        }
+        val postingLists = tokenizer.tokenize(query).map { index.rawQuery(it.text) }.toList()
 
-        if (postings.isEmpty()) {
+        if (postingLists.isEmpty()) {
             return emptySequence()
         }
 
-        return mergePostings(postings)
-            .filter { posting -> index.documentPath(posting.docId) != null }
-            .map { posting -> QueryResult(query, index.documentPath(posting.docId)!!, posting.position) }
+        val postings = mergePostings(postingLists)
+        return index.createQueryResults(query, postings)
     }
 
     private fun mergePostings(postings: List<PostingListView>): Sequence<Posting> = sequence {
@@ -116,5 +128,4 @@ class TrigramSubstringQueryResolver() : QueryResolver {
             }
         }
     }
-
 }

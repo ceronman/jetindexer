@@ -148,6 +148,28 @@ internal class TokenIndexTest {
         )
     }
 
+    @Test
+    internal fun fullScan(@TempDir tempDir: Path) {
+        val index = InvertedIndex(WhiteSpaceTokenizer())
+        val path1 = writeFile(tempDir, "six sixteen sixty")
+        val path2 = writeFile(tempDir, "-----six----")
+        val path3 = writeFile(tempDir, "And sssssix")
+        val path4 = writeFile(tempDir, "Other text")
+        index.addBatch(listOf(path1, path2, path3, path4))
+
+        val results = FullScanQueryResolver().search(index, "si")
+        assertEquals(
+            listOf(
+                QueryResult("si", path1, 0),
+                QueryResult("si", path1, 4),
+                QueryResult("si", path1, 12),
+                QueryResult("si", path2, 5),
+                QueryResult("si", path3, 8),
+            ),
+            results.toList()
+        )
+    }
+
     private fun writeFile(dir: Path, contents: String): Path {
         val path = Files.createTempFile(dir.toRealPath(), "test", ".txt")
         path.toFile().writeText(contents)

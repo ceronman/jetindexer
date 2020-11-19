@@ -28,8 +28,12 @@ fun main() {
     lateinit var indexer: JetIndexer
     var searchJob: Job? = null
 
-    val progressBar = JProgressBar()
-    progressBar.isVisible = false
+    val indexProgressBar = JProgressBar()
+    indexProgressBar.isVisible = false
+
+    val searchProgressBar = JProgressBar()
+    searchProgressBar.isVisible = false
+    searchProgressBar.isIndeterminate = true
 
     val logArea = JTextArea()
     logArea.text = "Please select a directory to watch"
@@ -50,8 +54,12 @@ fun main() {
             logArea.text = ""
             if (term.length < 3) {
                 logArea.text = "WARN Queries smaller than 3 characters are not indexed. They require a full scan search\n"
-                return@launch
             }
+
+            if (!indexProgressBar.isVisible) {
+                searchProgressBar.isVisible = true
+            }
+
             val results = indexer.query(term)
 
             for (chunk in results.chunked(100)) {
@@ -63,6 +71,10 @@ fun main() {
                     resultText.append("${result.path}:${result.position}\n")
                 }
                 logArea.text += resultText.toString()
+            }
+
+            if (isActive) {
+                searchProgressBar.isVisible = false
             }
         }
     }
@@ -87,10 +99,10 @@ fun main() {
             )
             inputBox.isEditable = true
             GlobalScope.launch(Dispatchers.Default) {
-                progressBar.isVisible = true
+                indexProgressBar.isVisible = true
                 inputBox.text = ""
-                indexer.index { progress -> progressBar.value = progress }
-                progressBar.isVisible = false
+                indexer.index { progress -> indexProgressBar.value = progress }
+                indexProgressBar.isVisible = false
                 logArea.text = "^ Type something in the box above!"
                 indexer.watch {
                     search()
@@ -105,10 +117,15 @@ fun main() {
     searchPanel.add(selectDirButton, BorderLayout.PAGE_START)
     searchPanel.add(inputBox, BorderLayout.PAGE_END)
 
+    val progressPanel = JPanel()
+    progressPanel.layout = BorderLayout()
+    progressPanel.add(searchProgressBar, BorderLayout.PAGE_START)
+    progressPanel.add(indexProgressBar, BorderLayout.PAGE_END)
+
     val panel = JPanel()
     panel.layout = BorderLayout()
     panel.add(searchPanel, BorderLayout.PAGE_START)
-    panel.add(progressBar, BorderLayout.AFTER_LAST_LINE)
+    panel.add(progressPanel, BorderLayout.AFTER_LAST_LINE)
     panel.add(JScrollPane(logArea), BorderLayout.CENTER)
 
     val frame = JFrame("JetIndexer sample application")
