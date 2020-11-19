@@ -16,6 +16,7 @@ package com.ceronman.jetindexer
 
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
+import java.lang.IllegalStateException
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Path
@@ -122,9 +123,7 @@ class InvertedIndex(private val tokenizer: Tokenizer) {
 
         if (shardWriter.overCapacity()) {
             log.info("ShardWriter is over capacity, writing shard to disk")
-            val shard = shardWriter.writeAndClear()
-            shard.load()
-            shards.add(shard)
+            addShard(shardWriter.writeAndClear())
         }
     }
 
@@ -265,6 +264,7 @@ class InvertedIndex(private val tokenizer: Tokenizer) {
     private fun addShard(shard: Shard) = rwLock.write {
         shard.load()
         shards.add(shard)
+        shards.sortBy { it.firstDocId }
     }
 }
 
@@ -285,11 +285,18 @@ internal class ShardWriter(private val tokenizer: Tokenizer) {
     private val postings = HashMap<String, PostingList>(SHARD_INDEX_CAPACITY)
     private val tokenPositions = HashMap<String, MutableList<Int>>(2048)
     private var size = 0
-
+    private var firstDocId: Int? = null
     /**
      * Adds a new [Document] to the shard
      */
     fun add(document: Document) {
+        if (firstDocId == null) {
+            firstDocId = document.id
+        } else {
+            if (document.id < firstDocId!!) {
+                throw IllegalStateException("A shard can only index incremental files ids")
+            }
+        }
         tokenPositions.clear()
         val tokens = try {
             tokenizer.tokenize(document.path)
@@ -337,6 +344,9 @@ internal class ShardWriter(private val tokenizer: Tokenizer) {
      * Clears the internal state so that new tokens can be indexed.
      */
     fun writeAndClear(): Shard {
+        if (firstDocId == null) {
+            throw IllegalStateException("There are no indexed documents")
+        }
         val shardPath = Files.createTempFile("jetindexer", "shard")
         val tokenOffsets = HashMap<String, IntArray>(postings.size)
         Files.newByteChannel(shardPath, StandardOpenOption.WRITE).use { channel ->
@@ -351,7 +361,7 @@ internal class ShardWriter(private val tokenizer: Tokenizer) {
         }
         postings.clear()
         size = 0
-        return Shard(shardPath, tokenOffsets)
+        return Shard(shardPath, tokenOffsets, firstDocId!!)
     }
 }
 
@@ -374,7 +384,8 @@ internal class ShardWriter(private val tokenizer: Tokenizer) {
  */
 internal class Shard(
     private val path: Path,
-    private val tokenOffsets: Map<String, IntArray>
+    private val tokenOffsets: Map<String, IntArray>,
+    val firstDocId: Int
 ) {
 
     private lateinit var buffer: ByteBuffer

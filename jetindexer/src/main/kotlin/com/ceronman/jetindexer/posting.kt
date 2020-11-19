@@ -145,6 +145,7 @@ class PostingListView(private val buffers: List<ByteBuffer>) {
      */
     fun readPostings(): Sequence<Posting> = sequence {
         for (buffer in buffers) {
+            buffer.rewind()
             while (buffer.hasRemaining()) {
                 val docId = buffer.getVarInt()
                 val numPositions = buffer.getVarInt()
