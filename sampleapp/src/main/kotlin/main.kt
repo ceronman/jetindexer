@@ -16,9 +16,7 @@ import com.ceronman.jetindexer.DefaultIndexingFilter
 import com.ceronman.jetindexer.JetIndexer
 import com.ceronman.jetindexer.TrigramSubstringQueryResolver
 import com.ceronman.jetindexer.TrigramTokenizer
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import java.awt.BorderLayout
 import java.awt.Dimension
 import javax.swing.*
@@ -28,6 +26,7 @@ import javax.swing.event.DocumentListener
 fun main() {
     System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "INFO")
     lateinit var indexer: JetIndexer
+    var searchJob: Job? = null
 
     val progressBar = JProgressBar()
     progressBar.isVisible = false
@@ -41,22 +40,30 @@ fun main() {
     inputBox.isEditable = false
 
     fun search() {
-        GlobalScope.launch(Dispatchers.Default) {
+        searchJob?.cancel()
+        searchJob = GlobalScope.launch(Dispatchers.Default) {
             val term = inputBox.text
             if (term.isEmpty()) {
-                logArea.text = "\uD83E\uDC51 Type something in the box above!"
+                logArea.text = "^ Type something in the box above!"
                 return@launch
             }
+            logArea.text = ""
             if (term.length < 3) {
-                logArea.text = "\uD83E\uDC53 Queries smaller than 3 characters are not indexed. Run a full scan"
+                logArea.text = "WARN Queries smaller than 3 characters are not indexed. They require a full scan search\n"
                 return@launch
             }
             val results = indexer.query(term)
-            val resultText = StringBuilder()
-            for (result in results) {
-                resultText.append("${result.path}:${result.position}\n")
+
+            for (chunk in results.chunked(100)) {
+                if (!isActive) {
+                    break
+                }
+                val resultText = StringBuilder()
+                for (result in chunk) {
+                    resultText.append("${result.path}:${result.position}\n")
+                }
+                logArea.text += resultText.toString()
             }
-            logArea.text = resultText.toString()
         }
     }
 

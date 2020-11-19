@@ -144,10 +144,10 @@ class JetIndexer(
      * Search a given term in the index. The capabilities of the search are dictated by the
      * [QueryResolver] used.
      *
-     * @return A list of [QueryResult] objects indicating the matched term, the file name matching
+     * @return A sequence of [QueryResult] objects indicating the matched term, the file name matching
      * and the position in the file of the term since the beginning of the file.
      */
-    fun query(term: String): List<QueryResult> {
+    fun query(term: String): Sequence<QueryResult> {
         return queryResolver.search(index, term)
     }
 

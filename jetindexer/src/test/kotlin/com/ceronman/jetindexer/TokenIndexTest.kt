@@ -41,7 +41,7 @@ internal class TokenIndexTest {
                 QueryResult("two", path2, 0),
                 QueryResult("two", path3, 0),
             ),
-            results3
+            results3.toList()
         )
     }
 
@@ -57,7 +57,7 @@ internal class TokenIndexTest {
 
         assertEquals(
             listOf(QueryResult("one", path1, 0)),
-            results1
+            results1.toList()
         )
 
         index.add(path2)
@@ -67,7 +67,7 @@ internal class TokenIndexTest {
                 QueryResult("two", path1, 4),
                 QueryResult("two", path2, 0),
             ),
-            results2
+            results2.toList()
         )
 
         index.add(path3)
@@ -78,7 +78,7 @@ internal class TokenIndexTest {
                 QueryResult("two", path2, 0),
                 QueryResult("two", path3, 0),
             ),
-            results3
+            results3.toList()
         )
     }
 
@@ -99,7 +99,7 @@ internal class TokenIndexTest {
                 QueryResult("two", path2, 0),
                 QueryResult("two", path3, 0),
             ),
-            results1
+            results1.toList()
         )
 
         index.delete(path3)
@@ -110,7 +110,7 @@ internal class TokenIndexTest {
                 QueryResult("two", path1, 4),
                 QueryResult("two", path2, 0),
             ),
-            results2
+            results2.toList()
         )
     }
 
@@ -131,7 +131,7 @@ internal class TokenIndexTest {
                 QueryResult("two", path2, 0),
                 QueryResult("two", path3, 0),
             ),
-            results1
+            results1.toList()
         )
 
         path3.toFile().writeText( "one two")
@@ -144,7 +144,7 @@ internal class TokenIndexTest {
                 QueryResult("two", path2, 0),
                 QueryResult("two", path3, 4),
             ),
-            results2
+            results2.toList()
         )
     }
 

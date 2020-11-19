@@ -40,7 +40,7 @@ internal class TrigramSubstringQueryResolverTest {
                 QueryResult("six", path2, 5),
                 QueryResult("six", path3, 8),
             ),
-            results3
+            results3.toList()
         )
     }
 

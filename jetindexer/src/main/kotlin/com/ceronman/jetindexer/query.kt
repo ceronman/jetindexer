@@ -33,7 +33,7 @@ data class QueryResult(
  * how the search id done.
  */
 interface QueryResolver {
-    fun search(index: InvertedIndex, query: String): List<QueryResult>
+    fun search(index: InvertedIndex, query: String): Sequence<QueryResult>
 }
 
 /**
@@ -41,12 +41,11 @@ interface QueryResolver {
  * is just a simple token. And then performs a single query to the inverted index.
  */
 class StandardQueryResolver() : QueryResolver {
-    override fun search(index: InvertedIndex, query: String): List<QueryResult> {
+    override fun search(index: InvertedIndex, query: String): Sequence<QueryResult> {
         val view = index.rawQuery(query)
         return view.readPostings()
             .filter { index.documentPath(it.docId) != null }
             .map { QueryResult(query, index.documentPath(it.docId)!!, it.position) }
-            .toList()
     }
 }
 
@@ -73,11 +72,11 @@ class StandardQueryResolver() : QueryResolver {
 class TrigramSubstringQueryResolver() : QueryResolver {
     private val tokenizer = TrigramTokenizer()
 
-    override fun search(index: InvertedIndex, query: String): List<QueryResult> {
+    override fun search(index: InvertedIndex, query: String): Sequence<QueryResult> {
         val postings = tokenizer.tokenize(query).map { index.rawQuery(it.text) }.toList()
 
         if (postings.isEmpty()) {
-            return emptyList()
+            return emptySequence()
         }
 
         return mergePostings(postings)
@@ -85,9 +84,8 @@ class TrigramSubstringQueryResolver() : QueryResolver {
             .map { posting -> QueryResult(query, index.documentPath(posting.docId)!!, posting.position) }
     }
 
-    private fun mergePostings(postings: List<PostingListView>): List<Posting> {
+    private fun mergePostings(postings: List<PostingListView>): Sequence<Posting> = sequence {
         val numLists = postings.size
-        val result = ArrayList<Posting>()
         val iterators = postings.map { it.peekableIterator() }
         while (iterators.all { it.hasNext() }) {
             val firstPosting = iterators[0].peek()
@@ -114,10 +112,9 @@ class TrigramSubstringQueryResolver() : QueryResolver {
             }
             if (equals) {
                 iterators.forEach { it.next() }
-                result.add(firstPosting)
+                yield(firstPosting)
             }
         }
-        return result
     }
 
 }

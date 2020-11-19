@@ -59,7 +59,7 @@ internal class JetIndexerTest {
                 QueryResult("six", path, 24),
                 QueryResult("six", path, 28)
             ),
-            indexer.query("six")
+            indexer.query("six").toList()
         )
 
         indexer.stopWatching()
@@ -78,12 +78,12 @@ internal class JetIndexerTest {
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         assertQuery(
             listOf(QueryResult("foo", path3, 0)),
-            indexer.query("foo")
+            indexer.query("foo").toList()
         )
 
         indexer.stopWatching()
@@ -95,7 +95,7 @@ internal class JetIndexerTest {
         initIndexer(listOf(path))
         assertQuery(
             emptyList(),
-            indexer.query("test")
+            indexer.query("test").toList()
         )
         indexer.stopWatching()
     }
@@ -109,7 +109,7 @@ internal class JetIndexerTest {
 
         assertQuery(
             listOf(QueryResult("one", path1, 0)),
-            indexer.query("one")
+            indexer.query("one").toList()
         )
         indexer.stopWatching()
     }
@@ -126,7 +126,7 @@ internal class JetIndexerTest {
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         Files.delete(path2)
@@ -137,7 +137,7 @@ internal class JetIndexerTest {
             listOf(
                 QueryResult("three", path1, 8),
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         indexer.stopWatching()
@@ -155,14 +155,14 @@ internal class JetIndexerTest {
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         assertQuery(
             listOf(
                 QueryResult("five", path2, 11),
             ),
-            indexer.query("five")
+            indexer.query("five").toList()
         )
 
         path2.toFile().writeText("xxx yyyy three")
@@ -174,12 +174,12 @@ internal class JetIndexerTest {
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 9)
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         assertQuery(
             emptyList<QueryResult>(),
-            indexer.query("five")
+            indexer.query("five").toList()
         )
 
         indexer.stopWatching()
@@ -197,14 +197,14 @@ internal class JetIndexerTest {
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         assertQuery(
             listOf(
                 QueryResult("five", path2, 11),
             ),
-            indexer.query("five")
+            indexer.query("five").toList()
         )
 
         val path3 = writeFile(tempDir, "xxx yyy zzz three")
@@ -217,14 +217,14 @@ internal class JetIndexerTest {
                 QueryResult("three", path2, 0),
                 QueryResult("three", path3, 12),
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         assertQuery(
             listOf(
                 QueryResult("five", path2, 11),
             ),
-            indexer.query("five")
+            indexer.query("five").toList()
         )
     }
 
@@ -244,12 +244,12 @@ internal class JetIndexerTest {
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         assertQuery(
             listOf(QueryResult("foo", path3, 0)),
-            indexer.query("foo")
+            indexer.query("foo").toList()
         )
 
         indexer.stopWatching()
@@ -272,7 +272,7 @@ internal class JetIndexerTest {
                 QueryResult("three", path1, 8),
                 QueryResult("three", path2, 0)
             ),
-            indexer.query("three")
+            indexer.query("three").toList()
         )
 
         assertQuery(
@@ -280,7 +280,7 @@ internal class JetIndexerTest {
                 QueryResult("foo", path3, 0),
                 QueryResult("foo", symlink, 0)
             ),
-            indexer.query("foo")
+            indexer.query("foo").toList()
         )
 
         indexer.stopWatching()
@@ -329,7 +329,7 @@ internal class JetIndexerTest {
                         var count = 0
                         while (isActive) {
                             val word = words[ThreadLocalRandom.current().nextInt(0, words.size)]
-                            val result = indexer.query(word)
+                            val result = indexer.query(word).toList()
                             if (result.isEmpty()) {
                                 empty++
                             }
